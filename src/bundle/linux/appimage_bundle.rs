@@ -8,6 +8,9 @@ use std::{
     process::Command,
 };
 
+use resvg::tiny_skia::{Pixmap, Transform};
+use resvg::usvg::{Options, Tree};
+
 use crate::bundle::{Settings, common};
 
 use super::common::{generate_desktop_file, generate_icon_files};
@@ -68,6 +71,47 @@ pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
     std::fs::set_permissions(&package_path, perms)?;
 
     Ok(vec![package_path])
+}
+
+fn generate_dir_icon(settings: &Settings, app_dir: &std::path::Path) -> crate::Result<()> {
+    for icon_path in settings.icon_files() {
+        let icon_path = icon_path?;
+        if icon_path.extension() == Some(OsStr::new("svg")) {
+            let svg_data = std::fs::read_to_string(&icon_path)
+                .with_context(|| format!("Failed to read SVG icon {icon_path:?}"))?;
+
+            let opt = Options::default();
+            let tree = Tree::from_data(svg_data.as_bytes(), &opt)
+                .with_context(|| "Failed to parse SVG for .DirIcon")?;
+
+            let size: u32 = 256;
+            let mut pixmap =
+                Pixmap::new(size, size).with_context(|| "Failed to create pixmap for .DirIcon")?;
+            resvg::render(
+                &tree,
+                Transform::from_scale(
+                    size as f32 / tree.size().width(),
+                    size as f32 / tree.size().height(),
+                ),
+                &mut pixmap.as_mut(),
+            );
+
+            pixmap
+                .save_png(app_dir.join(".DirIcon"))
+                .with_context(|| "Failed to save .DirIcon PNG")?;
+
+            // Also symlink the SVG into the AppDir root so tools that prefer
+            // the vector version can find it.
+            let svg_filename = format!("{}.svg", settings.binary_name());
+            let svg_rel =
+                PathBuf::from("usr/share/icons/hicolor/scalable/apps").join(&svg_filename);
+            let _ = common::symlink_file(&svg_rel, &app_dir.join(&svg_filename));
+
+            return Ok(());
+        }
+    }
+
+    Ok(())
 }
 
 fn fetch_runtime(arch: &str) -> crate::Result<Vec<u8>> {
