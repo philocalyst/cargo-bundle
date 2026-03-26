@@ -43,6 +43,11 @@ pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
 
     common::symlink_file(&binary_dest_rel, &app_dir.join("AppRun"))?;
 
+    // Symlink the .desktop file to the AppDir root.
+    let desktop_filename = format!("{}.desktop", settings.binary_name());
+    let desktop_rel = PathBuf::from("usr/share/applications").join(&desktop_filename);
+    common::symlink_file(&desktop_rel, &app_dir.join(&desktop_filename))?;
+
     // Generate a .DirIcon PNG from the first SVG icon, or symlink the first
     // PNG icon so AppImage tools can pick it up.
     generate_dir_icon(settings, &app_dir)?;
