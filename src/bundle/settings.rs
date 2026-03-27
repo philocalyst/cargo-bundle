@@ -115,6 +115,7 @@ struct BundleSettings {
     osx_minimum_system_version: Option<String>,
     osx_url_schemes: Option<Vec<String>>,
     osx_info_plist_exts: Option<Vec<String>>,
+    osx_localizations: Option<HashMap<String, HashMap<String, String>>>,
     // Bundles for other binaries/examples:
     bin: Option<HashMap<String, BundleSettings>>,
     example: Option<HashMap<String, BundleSettings>>,
@@ -560,6 +561,14 @@ impl Settings {
             Some(ref paths) => ResourcePaths::new(paths.as_slice(), false),
             None => ResourcePaths::new(&[], false),
         }
+    }
+
+    /// Returns a map of locale codes to key-value localisation strings for
+    /// macOS `*.lproj/InfoPlist.strings` files.  The outer key is a locale
+    /// code such as `"fr"` or `"de"` and the inner map contains plist string
+    /// keys such as `"CFBundleDisplayName"` mapped to their translated value.
+    pub fn osx_localizations(&self) -> Option<&HashMap<String, HashMap<String, String>>> {
+        self.bundle_settings.osx_localizations.as_ref()
     }
 }
 
