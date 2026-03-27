@@ -38,6 +38,24 @@ const TRANSLATION_ENTRY_ENGLISH_US_UNICODE: [u8; 4] = [0x09, 0x04, 0xB0, 0x04];
 
 const WINDOWS_VERSION_COMPONENT_COUNT: usize = 4;
 
+fn pad_to_four_byte_alignment(buffer: &mut Vec<u8>) {
+    const FOUR_BYTE_ALIGNMENT: usize = 4;
+    while buffer.len() % FOUR_BYTE_ALIGNMENT != 0 {
+        buffer.push(0);
+    }
+}
+
+fn encode_null_terminated_utf16_le(text: &str) -> Vec<u8> {
+    text.encode_utf16()
+        .chain(std::iter::once(0u16))
+        .flat_map(|utf16_code_unit| utf16_code_unit.to_le_bytes())
+        .collect()
+}
+
+fn pack_windows_version(major: u64, minor: u64, patch: u64, build: u64) -> u64 {
+    (major << 48) | (minor << 32) | (patch << 16) | build
+}
+
 fn build_fixed_file_info(file_version: u64, product_version: u64) -> Vec<u8> {
     /// Magic signature that identifies a VS_FIXEDFILEINFO structure.
     const VS_FIXED_FILE_INFO_SIGNATURE: u32 = 0xFEEF_04BD;
