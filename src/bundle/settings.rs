@@ -561,6 +561,14 @@ impl Settings {
             None => ResourcePaths::new(&[], false),
         }
     }
+
+    /// Returns a map of locale codes to key-value localisation strings for
+    /// macOS `*.lproj/InfoPlist.strings` files.  The outer key is a locale
+    /// code such as `"fr"` or `"de"` and the inner map contains plist string
+    /// keys such as `"CFBundleDisplayName"` mapped to their translated value.
+    pub fn osx_localizations(&self) -> Option<&HashMap<String, HashMap<String, String>>> {
+        self.bundle_settings.osx_localizations.as_ref()
+    }
 }
 
 fn bundle_settings_from_table(
