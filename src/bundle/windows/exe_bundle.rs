@@ -38,6 +38,45 @@ const TRANSLATION_ENTRY_ENGLISH_US_UNICODE: [u8; 4] = [0x09, 0x04, 0xB0, 0x04];
 
 const WINDOWS_VERSION_COMPONENT_COUNT: usize = 4;
 
+fn build_fixed_file_info(file_version: u64, product_version: u64) -> Vec<u8> {
+    /// Magic signature that identifies a VS_FIXEDFILEINFO structure.
+    const VS_FIXED_FILE_INFO_SIGNATURE: u32 = 0xFEEF_04BD;
+
+    /// VS_FIXEDFILEINFO structure layout version 1.0.
+    const VS_FIXED_FILE_INFO_STRUCT_VERSION_1_0: u32 = 0x0001_0000;
+
+    const VS_FILE_FLAGS_MASK_ALL: u32 = 0xFFFF_FFFF;
+    const VS_FILE_FLAGS_NONE: u32 = 0x0000_0000;
+
+    /// Operating system identifier: Windows NT Win32 subsystem.
+    const VOS_NT_WINDOWS32: u32 = 0x0000_0004;
+
+    /// File type identifier: application executable.
+    const VFT_APPLICATION: u32 = 0x0000_0001;
+
+    const VFT2_UNKNOWN_SUBTYPE: u32 = 0x0000_0000;
+    const VS_FILE_DATE_UNUSED: u32 = 0x0000_0000;
+
+    let mut buffer = Vec::new();
+    for field_value in [
+        VS_FIXED_FILE_INFO_SIGNATURE,
+        VS_FIXED_FILE_INFO_STRUCT_VERSION_1_0,
+        (file_version >> 32) as u32,
+        file_version as u32,
+        (product_version >> 32) as u32,
+        product_version as u32,
+        VS_FILE_FLAGS_MASK_ALL,
+        VS_FILE_FLAGS_NONE,
+        VOS_NT_WINDOWS32,
+        VFT_APPLICATION,
+        VFT2_UNKNOWN_SUBTYPE,
+        VS_FILE_DATE_UNUSED,
+        VS_FILE_DATE_UNUSED,
+    ] {
+        buffer.extend_from_slice(&field_value.to_le_bytes());
+    }
+    buffer
+}
 /// Builds a VS_VERSIONINFO node per the Windows SDK specification:
 /// <https://learn.microsoft.com/en-us/windows/win32/menurc/vs-versioninfo>
 fn build_version_info_node(
