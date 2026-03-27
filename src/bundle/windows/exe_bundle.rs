@@ -134,6 +134,23 @@ fn build_version_info_node(
     buffer
 }
 
+fn build_string_entry(key: &str, value: &str) -> Vec<u8> {
+    let key_encoded = encode_null_terminated_utf16_le(key);
+    let value_encoded = encode_null_terminated_utf16_le(value);
+    let value_char_count = (value.encode_utf16().count() + 1) as u16;
+    let node_byte_length = (2 + 2 + 2 + key_encoded.len() + value_encoded.len()) as u16;
+
+    let mut buffer = Vec::new();
+    buffer.extend_from_slice(&node_byte_length.to_le_bytes());
+    buffer.extend_from_slice(&value_char_count.to_le_bytes());
+    buffer.extend_from_slice(&VERSION_NODE_DATA_TYPE_TEXT.to_le_bytes());
+    buffer.extend_from_slice(&key_encoded);
+
+    pad_to_four_byte_alignment(&mut buffer);
+    buffer.extend_from_slice(&value_encoded);
+    buffer
+}
+
 fn build_string_file_info(pairs: &[(&str, String)]) -> Vec<u8> {
     let mut string_entries = Vec::new();
     for (key, value) in pairs {
@@ -168,4 +185,24 @@ fn build_var_file_info() -> Vec<u8> {
         VERSION_NODE_DATA_TYPE_TEXT,
         &translation_node,
     )
+}
+
+fn build_version_info_resource(
+    settings: &Settings,
+    string_pairs: &[(&str, String)],
+) -> crate::Result<Vec<u8>> {
+    let version = parse_version(&settings.version_string().to_string());
+    let fixed_file_info = build_fixed_file_info(version, version);
+    let string_file_info = build_string_file_info(string_pairs);
+    let var_file_info = build_var_file_info();
+
+    let children = [string_file_info.as_slice(), var_file_info.as_slice()].concat();
+    let root_node = build_version_info_node(
+        "VS_VERSION_INFO",
+        &fixed_file_info,
+        VERSION_NODE_DATA_TYPE_BINARY,
+        &children,
+    );
+
+    Ok(root_node)
 }
