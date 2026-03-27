@@ -117,3 +117,66 @@ impl Icon {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn blank_rgba(size: u32) -> Vec<u8> {
+        vec![0u8; (size * size * BYTES_PER_BGRA_PIXEL) as usize]
+    }
+
+    #[test]
+    fn icon_encode_length_is_deterministic() {
+        let size = 16u32;
+        let icon = Icon::new_from_rgba(size, size, 1, blank_rgba(size));
+        let encoded = icon.encode().unwrap();
+
+        let and_mask_row_stride =
+            ((size + AND_MASK_ROW_ALIGNMENT_BITS - 1) / AND_MASK_ROW_ALIGNMENT_BITS)
+                * BYTES_PER_DWORD;
+        let expected = BITMAP_INFO_HEADER_BYTE_SIZE
+            + (size * size * BYTES_PER_BGRA_PIXEL)
+            + and_mask_row_stride * size;
+        assert_eq!(encoded.len() as u32, expected);
+    }
+
+    #[test]
+    fn icon_encode_header_signature() {
+        let icon = Icon::new_from_rgba(32, 32, 2, blank_rgba(32));
+        let encoded = icon.encode().unwrap();
+
+        let header_size = u32::from_le_bytes(encoded[0..4].try_into().unwrap());
+        assert_eq!(header_size, BITMAP_INFO_HEADER_BYTE_SIZE);
+
+        let bits_per_pixel = u16::from_le_bytes(
+            encoded[BITMAPINFOHEADER_BITS_PER_PIXEL_OFFSET
+                ..BITMAPINFOHEADER_BITS_PER_PIXEL_OFFSET + 2]
+                .try_into()
+                .unwrap(),
+        );
+        assert_eq!(bits_per_pixel, BITS_PER_BGRA_PIXEL);
+    }
+
+    #[test]
+    fn rgba_to_bgra_conversion() {
+        let opaque_red_rgba = vec![0xFF, 0x00, 0x00, 0xFF];
+        let icon = Icon::new_from_rgba(1, 1, 1, opaque_red_rgba);
+        let encoded = icon.encode().unwrap();
+
+        let first_pixel_offset = BITMAP_INFO_HEADER_BYTE_SIZE as usize;
+        assert_eq!(encoded[first_pixel_offset],     0x00); // B
+        assert_eq!(encoded[first_pixel_offset + 1], 0x00); // G
+        assert_eq!(encoded[first_pixel_offset + 2], 0xFF); // R
+        assert_eq!(encoded[first_pixel_offset + 3], 0xFF); // A
+    }
+
+    #[test]
+    fn group_icon_entry_reflects_icon_metadata() {
+        let icon = Icon::new_from_rgba(48, 48, 5, blank_rgba(48));
+        let entry = icon.group_icon_entry().unwrap();
+        assert_eq!(entry.width, 48);
+        assert_eq!(entry.height, 48);
+        assert_eq!(entry.id, 5);
+        assert_eq!(entry.bit_count, BITS_PER_BGRA_PIXEL);
+    }
+}
