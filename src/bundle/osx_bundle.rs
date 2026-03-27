@@ -23,6 +23,8 @@ use crate::Settings;
 use anyhow::Context;
 use image::imageops::FilterType::Lanczos3;
 use image::{self, GenericImageView};
+use resvg::tiny_skia::{Pixmap, Transform};
+use resvg::usvg::{Options, Tree};
 use std::cmp::min;
 use std::ffi::OsStr;
 use std::fs::{self, File};
