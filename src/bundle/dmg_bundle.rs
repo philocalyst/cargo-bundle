@@ -11,3 +11,20 @@
 // Building requires macOS because the `hdiutil` command is used to create and
 // convert the disk image.
 
+/// Walk a directory and sum the sizes of all contained files.
+fn dir_size(dir: &std::path::Path) -> crate::Result<u64> {
+    let mut total: u64 = 0;
+    for entry in walkdir::WalkDir::new(dir) {
+        let entry = entry?;
+        if entry.file_type().is_file() {
+            total += entry.metadata()?.len();
+        }
+    }
+    Ok(total)
+}
+
+/// Extract the mount point path from `hdiutil attach` stdout.
+fn parse_mount_point(stdout: &[u8]) -> crate::Result<PathBuf> {
+    parse_mount_point_impl(stdout)
+}
+
