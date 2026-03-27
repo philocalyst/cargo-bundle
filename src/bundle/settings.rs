@@ -728,4 +728,48 @@ mod tests {
         let baz: &BundleSettings = examples.get("baz").unwrap();
         assert_eq!(baz.name, Some("Baz Example".to_string()));
     }
+
+    #[test]
+    fn dmg_and_exe_round_trip() {
+        use super::PackageType;
+
+        // Each new short name should parse back to the correct variant.
+        assert_eq!(
+            PackageType::from_short_name("dmg"),
+            Some(PackageType::OsxDmg)
+        );
+        assert_eq!(
+            PackageType::from_short_name("exe"),
+            Some(PackageType::WindowsBundle)
+        );
+
+        // And Display / short_name should survive the round-trip.
+        assert_eq!(PackageType::OsxDmg.short_name(), "dmg");
+        assert_eq!(PackageType::WindowsBundle.short_name(), "exe");
+        assert_eq!(PackageType::OsxDmg.to_string(), "dmg");
+        assert_eq!(PackageType::WindowsBundle.to_string(), "exe");
+    }
+
+    #[test]
+    fn all_package_types_are_listed() {
+        use super::PackageType;
+        let all = PackageType::all();
+        assert!(all.contains(&"dmg"), "dmg missing from PackageType::all()");
+        assert!(all.contains(&"exe"), "exe missing from PackageType::all()");
+    }
+
+    #[test]
+    fn osx_localizations_parses_from_toml() {
+        let toml_str = r#"
+            [osx_localizations.fr]
+            CFBundleDisplayName = "Mon Application"
+
+            [osx_localizations.de]
+            CFBundleDisplayName = "Meine Anwendung"
+        "#;
+        let bundle: BundleSettings = toml::from_str(toml_str).unwrap();
+        let locs = bundle.osx_localizations.unwrap();
+        assert_eq!(locs["fr"]["CFBundleDisplayName"], "Mon Application");
+        assert_eq!(locs["de"]["CFBundleDisplayName"], "Meine Anwendung");
+    }
 }
