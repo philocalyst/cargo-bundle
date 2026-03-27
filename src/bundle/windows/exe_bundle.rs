@@ -38,6 +38,32 @@ const TRANSLATION_ENTRY_ENGLISH_US_UNICODE: [u8; 4] = [0x09, 0x04, 0xB0, 0x04];
 
 const WINDOWS_VERSION_COMPONENT_COUNT: usize = 4;
 
+/// Builds a VS_VERSIONINFO node per the Windows SDK specification:
+/// <https://learn.microsoft.com/en-us/windows/win32/menurc/vs-versioninfo>
+fn build_version_info_node(
+    key: &str,
+    value_bytes: &[u8],
+    data_type: u16,
+    children: &[u8],
+) -> Vec<u8> {
+    let key_encoded = encode_null_terminated_utf16_le(key);
+    let header_byte_size = 2 + 2 + 2 + key_encoded.len();
+    let total_byte_size = header_byte_size + value_bytes.len() + children.len();
+
+    let mut buffer = Vec::new();
+    buffer.extend_from_slice(&(total_byte_size as u16).to_le_bytes());
+    buffer.extend_from_slice(&(value_bytes.len() as u16).to_le_bytes());
+    buffer.extend_from_slice(&data_type.to_le_bytes());
+    buffer.extend_from_slice(&key_encoded);
+
+    pad_to_four_byte_alignment(&mut buffer);
+    buffer.extend_from_slice(value_bytes);
+
+    pad_to_four_byte_alignment(&mut buffer);
+    buffer.extend_from_slice(children);
+    buffer
+}
+
 fn build_string_file_info(pairs: &[(&str, String)]) -> Vec<u8> {
     let mut string_entries = Vec::new();
     for (key, value) in pairs {
