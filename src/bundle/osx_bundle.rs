@@ -500,6 +500,31 @@ fn create_icns_file(
     anyhow::bail!("No usable icon files found.");
 }
 
+/// Writes `*.lproj/InfoPlist.strings` localisation files into `resources_dir`
+/// for every locale present in the settings' `osx_localizations` map.
+fn write_localizations(resources_dir: &Path, settings: &Settings) -> crate::Result<()> {
+    let Some(localizations) = settings.osx_localizations() else {
+        return Ok(());
+    };
+
+    for (locale, strings) in localizations {
+        let lproj_dir = resources_dir.join(locale).with_extension("lproj");
+        fs::create_dir_all(&lproj_dir)
+            .with_context(|| format!("Failed to create {lproj_dir:?}"))?;
+
+        let strings_path = lproj_dir.join("InfoPlist.strings");
+        let file = &mut common::create_file(&strings_path)?;
+        for (key, value) in strings {
+            // Escape embedded double-quotes in the value.
+            let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+            writeln!(file, "{key} = \"{escaped}\";")?;
+        }
+        file.flush()?;
+    }
+
+    Ok(())
+}
+
 /// Converts an image::DynamicImage into an icns::Image.
 fn make_icns_image(img: image::DynamicImage) -> io::Result<icns::Image> {
     let pixel_format = match img.color() {
