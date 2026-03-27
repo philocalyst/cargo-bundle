@@ -38,6 +38,192 @@ const TRANSLATION_ENTRY_ENGLISH_US_UNICODE: [u8; 4] = [0x09, 0x04, 0xB0, 0x04];
 
 const WINDOWS_VERSION_COMPONENT_COUNT: usize = 4;
 
+pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
+    let exe_name = format!("{}.exe", settings.binary_name());
+    common::print_bundling(&exe_name)?;
+
+    let base_dir = settings.project_out_directory().join("bundle/exe");
+    fs::create_dir_all(&base_dir)
+        .with_context(|| format!("Failed to create output directory {base_dir:?}"))?;
+
+    let output_exe = base_dir.join(&exe_name);
+    fs::copy(settings.binary_path(), &output_exe)
+        .with_context(|| format!("Failed to copy executable to {output_exe:?}"))?;
+
+    let svg_icon_path = settings
+        .icon_files()
+        .filter_map(|icon_path_result| icon_path_result.ok())
+        .find(|path| path.extension() == Some(OsStr::new("svg")));
+
+    embed_resources(settings, &output_exe, svg_icon_path.as_deref())?;
+
+    Ok(vec![output_exe])
+}
+
+fn embed_resources(
+    settings: &Settings,
+    exe_path: &std::path::Path,
+    svg_icon: Option<&std::path::Path>,
+) -> crate::Result<()> {
+    #[cfg(target_os = "windows")]
+    {
+        embed_resources_windows(settings, exe_path, svg_icon)
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (settings, exe_path, svg_icon);
+        common::print_warning(
+            "Windows PE resource embedding (icons, version info) is only performed \
+             when cargo-bundle itself is run on Windows.",
+        )?;
+        Ok(())
+    }
+}
+
+fn embed_resources_windows(
+    settings: &Settings,
+    exe_path: &std::path::Path,
+    svg_icon: Option<&std::path::Path>,
+) -> crate::Result<()> {
+    let mut resources = Resources::new(exe_path);
+    resources
+        .load()
+        .with_context(|| "Failed to load PE resources")?;
+    resources
+        .open()
+        .with_context(|| "Failed to open PE resources for writing")?;
+
+    embed_version_info(settings, &resources)?;
+
+    if let Some(svg_path) = svg_icon {
+        embed_svg_icons(svg_path, &resources)?;
+    }
+
+    resources.close();
+
+    Ok(())
+}
+
+fn embed_version_info(
+    settings: &Settings,
+    resources: &winres_edit::Resources,
+) -> crate::Result<()> {
+    use winres_edit::{Id, Resource, resource_type};
+
+    let version_string = settings.version_string().to_string();
+    let string_pairs: &[(&str, String)] = &[
+        ("ProductName", settings.bundle_name().to_owned()),
+        ("FileDescription", settings.short_description().to_owned()),
+        ("FileVersion", version_string.clone()),
+        ("ProductVersion", version_string),
+        (
+            "LegalCopyright",
+            settings.copyright_string().unwrap_or("").to_owned(),
+        ),
+        (
+            "CompanyName",
+            settings.authors_comma_separated().unwrap_or_default(),
+        ),
+        ("InternalName", settings.binary_name().to_owned()),
+        (
+            "OriginalFilename",
+            format!("{}.exe", settings.binary_name()),
+        ),
+    ];
+
+    let version_info_data = build_version_info_resource(settings, string_pairs)
+        .with_context(|| "Failed to build VS_VERSIONINFO resource")?;
+
+    let version_resource = Resource::new(
+        resources,
+        resource_type::VERSION.into(),
+        Id::Integer(VERSION_RESOURCE_ID).into(),
+        LANGUAGE_ID_ENGLISH_US,
+        &version_info_data,
+    );
+
+    version_resource
+        .update()
+        .with_context(|| "Failed to update version info resource")?;
+
+    Ok(())
+}
+
+fn embed_svg_icons(
+    svg_path: &std::path::Path,
+    resources: &winres_edit::Resources,
+) -> crate::Result<()> {
+    use winres_edit::{Id, Resource, resource_type};
+
+    let svg_text = std::fs::read_to_string(svg_path)
+        .with_context(|| format!("Failed to read SVG icon {svg_path:?}"))?;
+    let svg_parse_options = Options::default();
+    let svg_tree = Tree::from_data(svg_text.as_bytes(), &svg_parse_options)
+        .with_context(|| "Failed to parse SVG icon data")?;
+
+    let mut group_icon = GroupIcon::default();
+
+    for (size_index, &pixel_size) in ICON_PIXEL_SIZES.iter().enumerate() {
+        let icon_resource_id = FIRST_INDIVIDUAL_ICON_RESOURCE_ID + size_index as u16;
+
+        let mut pixmap = Pixmap::new(pixel_size, pixel_size)
+            .with_context(|| format!("Failed to create {pixel_size}×{pixel_size} pixmap"))?;
+
+        let scale_x = pixel_size as f32 / svg_tree.size().width();
+        let scale_y = pixel_size as f32 / svg_tree.size().height();
+        resvg::render(
+            &svg_tree,
+            Transform::from_scale(scale_x, scale_y),
+            &mut pixmap.as_mut(),
+        );
+
+        let icon = Icon::new_from_rgba(
+            pixel_size,
+            pixel_size,
+            icon_resource_id,
+            pixmap.data().to_vec(),
+        );
+        let encoded_icon = icon
+            .encode()
+            .with_context(|| format!("Failed to encode {pixel_size}×{pixel_size} icon"))?;
+
+        group_icon.push_icon(
+            icon.group_icon_entry()
+                .with_context(|| "Failed to build group icon entry")?,
+        );
+
+        let icon_resource = Resource::new(
+            resources,
+            resource_type::ICON.into(),
+            Id::Integer(icon_resource_id).into(),
+            LANGUAGE_ID_ENGLISH_US,
+            &encoded_icon,
+        );
+
+        icon_resource
+            .update()
+            .with_context(|| format!("Failed to embed {pixel_size}×{pixel_size} icon resource"))?;
+    }
+
+    let group_icon_data = group_icon
+        .encode()
+        .with_context(|| "Failed to encode RT_GROUP_ICON")?;
+
+    let group_icon_resource = Resource::new(
+        resources,
+        Id::Integer(RT_GROUP_ICON_RESOURCE_TYPE).into(),
+        Id::Integer(APPLICATION_ICON_GROUP_RESOURCE_ID).into(),
+        LANGUAGE_ID_ENGLISH_US,
+        &group_icon_data,
+    );
+
+    group_icon_resource
+        .update()
+        .with_context(|| "Failed to embed RT_GROUP_ICON resource")?;
+
+    Ok(())
+}
+
 fn pad_to_four_byte_alignment(buffer: &mut Vec<u8>) {
     const FOUR_BYTE_ALIGNMENT: usize = 4;
     while buffer.len() % FOUR_BYTE_ALIGNMENT != 0 {
@@ -95,6 +281,7 @@ fn build_fixed_file_info(file_version: u64, product_version: u64) -> Vec<u8> {
     }
     buffer
 }
+
 fn parse_version(version_string: &str) -> u64 {
     let mut version_components = version_string
         .splitn(WINDOWS_VERSION_COMPONENT_COUNT, '.')
