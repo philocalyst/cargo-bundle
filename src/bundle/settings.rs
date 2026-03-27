@@ -12,9 +12,11 @@ use target_build_utils::TargetInfo;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PackageType {
     OsxBundle,
+    OsxDmg,
     IosBundle,
     WindowsMsi,
     WxsMsi,
+    WindowsBundle,
     Deb,
     Rpm,
     AppImage,
@@ -63,8 +65,10 @@ impl PackageType {
             "msi" => Some(PackageType::WindowsMsi),
             "wxsmsi" => Some(PackageType::WxsMsi),
             "osx" => Some(PackageType::OsxBundle),
+            "dmg" => Some(PackageType::OsxDmg),
             "rpm" => Some(PackageType::Rpm),
             "appimage" => Some(PackageType::AppImage),
+            "exe" => Some(PackageType::WindowsBundle),
             _ => None,
         }
     }
@@ -76,13 +80,17 @@ impl PackageType {
             PackageType::WindowsMsi => "msi",
             PackageType::WxsMsi => "wxsmsi",
             PackageType::OsxBundle => "osx",
+            PackageType::OsxDmg => "dmg",
             PackageType::Rpm => "rpm",
             PackageType::AppImage => "appimage",
+            PackageType::WindowsBundle => "exe",
         }
     }
 
     pub const fn all() -> &'static [&'static str] {
-        &["deb", "ios", "msi", "wxsmsi", "osx", "rpm", "appimage"]
+        &[
+            "deb", "ios", "msi", "wxsmsi", "osx", "dmg", "rpm", "appimage", "exe",
+        ]
     }
 }
 
@@ -115,6 +123,7 @@ struct BundleSettings {
     osx_minimum_system_version: Option<String>,
     osx_url_schemes: Option<Vec<String>>,
     osx_info_plist_exts: Option<Vec<String>>,
+    osx_localizations: Option<HashMap<String, HashMap<String, String>>>,
     // Bundles for other binaries/examples:
     bin: Option<HashMap<String, BundleSettings>>,
     example: Option<HashMap<String, BundleSettings>>,
@@ -200,7 +209,9 @@ impl Settings {
             ),
         };
         let binary_extension = match package_type {
-            Some(PackageType::WindowsMsi) | Some(PackageType::WxsMsi) => ".exe",
+            Some(PackageType::WindowsMsi)
+            | Some(PackageType::WxsMsi)
+            | Some(PackageType::WindowsBundle) => ".exe",
             _ => "",
         };
         binary_name += binary_extension;
@@ -357,10 +368,10 @@ impl Settings {
                 std::env::consts::OS
             };
             match target_os {
-                "macos" => Ok(vec![PackageType::OsxBundle]),
+                "macos" => Ok(vec![PackageType::OsxBundle, PackageType::OsxDmg]),
                 "ios" => Ok(vec![PackageType::IosBundle]),
                 "linux" => Ok(vec![PackageType::Deb, PackageType::AppImage]), // TODO: Do Rpm too, once it's implemented.
-                "windows" => Ok(vec![PackageType::WindowsMsi]),
+                "windows" => Ok(vec![PackageType::WindowsMsi, PackageType::WindowsBundle]),
                 os => anyhow::bail!("Native {} bundles not yet supported.", os),
             }
         }
