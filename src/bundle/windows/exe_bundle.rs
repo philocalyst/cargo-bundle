@@ -38,3 +38,17 @@ const TRANSLATION_ENTRY_ENGLISH_US_UNICODE: [u8; 4] = [0x09, 0x04, 0xB0, 0x04];
 
 const WINDOWS_VERSION_COMPONENT_COUNT: usize = 4;
 
+fn build_var_file_info() -> Vec<u8> {
+    let translation_node = build_version_info_node(
+        "Translation",
+        &TRANSLATION_ENTRY_ENGLISH_US_UNICODE,
+        VERSION_NODE_DATA_TYPE_BINARY,
+        &[],
+    );
+    build_version_info_node(
+        "VarFileInfo",
+        &[],
+        VERSION_NODE_DATA_TYPE_TEXT,
+        &translation_node,
+    )
+}
