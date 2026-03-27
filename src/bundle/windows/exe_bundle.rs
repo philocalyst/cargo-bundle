@@ -95,6 +95,19 @@ fn build_fixed_file_info(file_version: u64, product_version: u64) -> Vec<u8> {
     }
     buffer
 }
+fn parse_version(version_string: &str) -> u64 {
+    let mut version_components = version_string
+        .splitn(WINDOWS_VERSION_COMPONENT_COUNT, '.')
+        .map(|component| component.parse::<u16>().unwrap_or(0));
+
+    let major = version_components.next().unwrap_or(0) as u64;
+    let minor = version_components.next().unwrap_or(0) as u64;
+    let patch = version_components.next().unwrap_or(0) as u64;
+    let build = version_components.next().unwrap_or(0) as u64;
+
+    pack_windows_version(major, minor, patch, build)
+}
+
 /// Builds a VS_VERSIONINFO node per the Windows SDK specification:
 /// <https://learn.microsoft.com/en-us/windows/win32/menurc/vs-versioninfo>
 fn build_version_info_node(
