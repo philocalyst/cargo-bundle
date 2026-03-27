@@ -38,6 +38,27 @@ const TRANSLATION_ENTRY_ENGLISH_US_UNICODE: [u8; 4] = [0x09, 0x04, 0xB0, 0x04];
 
 const WINDOWS_VERSION_COMPONENT_COUNT: usize = 4;
 
+fn build_string_file_info(pairs: &[(&str, String)]) -> Vec<u8> {
+    let mut string_entries = Vec::new();
+    for (key, value) in pairs {
+        pad_to_four_byte_alignment(&mut string_entries);
+        string_entries.extend(build_string_entry(key, value));
+    }
+
+    let string_table = build_version_info_node(
+        STRING_TABLE_LOCALE_ENGLISH_US_UNICODE,
+        &[],
+        VERSION_NODE_DATA_TYPE_TEXT,
+        &string_entries,
+    );
+    build_version_info_node(
+        "StringFileInfo",
+        &[],
+        VERSION_NODE_DATA_TYPE_TEXT,
+        &string_table,
+    )
+}
+
 fn build_var_file_info() -> Vec<u8> {
     let translation_node = build_version_info_node(
         "Translation",
