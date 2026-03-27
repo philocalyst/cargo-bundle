@@ -500,6 +500,81 @@ fn create_icns_file(
     anyhow::bail!("No usable icon files found.");
 }
 
+/// Renders an SVG icon at standard macOS iconset sizes, then runs `iconutil`
+/// to produce an ICNS file at `dest_path`.
+fn create_icns_from_svg(
+    svg_path: &Path,
+    resources_dir: &Path,
+    dest_path: &Path,
+) -> crate::Result<()> {
+    let svg_data = fs::read_to_string(svg_path)
+        .with_context(|| format!("Failed to read SVG file {svg_path:?}"))?;
+
+    let temp_dir = tempfile::tempdir().with_context(|| "Failed to create temp dir for iconset")?;
+    let iconset_dir = temp_dir.path().join("icon.iconset");
+    fs::create_dir_all(&iconset_dir)?;
+
+    let opt = Options::default();
+    let tree =
+        Tree::from_data(svg_data.as_bytes(), &opt).with_context(|| "Failed to parse SVG data")?;
+
+    // Standard macOS iconset sizes: (logical_size, scale_factor)
+    let sizes: &[(u32, u32)] = &[
+        (16, 1),
+        (16, 2),
+        (32, 1),
+        (32, 2),
+        (128, 1),
+        (128, 2),
+        (256, 1),
+        (256, 2),
+        (512, 1),
+        (512, 2),
+    ];
+
+    for &(size, scale) in sizes {
+        let pixel_size = size * scale;
+        let filename = if scale == 1 {
+            format!("icon_{size}x{size}.png")
+        } else {
+            format!("icon_{size}x{size}@{scale}x.png")
+        };
+        let output_path = iconset_dir.join(&filename);
+
+        let mut pixmap = Pixmap::new(pixel_size, pixel_size)
+            .with_context(|| format!("Failed to create {pixel_size}x{pixel_size} pixmap"))?;
+        resvg::render(
+            &tree,
+            Transform::from_scale(
+                pixel_size as f32 / tree.size().width(),
+                pixel_size as f32 / tree.size().height(),
+            ),
+            &mut pixmap.as_mut(),
+        );
+        pixmap
+            .save_png(&output_path)
+            .with_context(|| format!("Failed to save PNG {output_path:?}"))?;
+    }
+
+    let status = std::process::Command::new("iconutil")
+        .current_dir(temp_dir.path())
+        .arg("-c")
+        .arg("icns")
+        .arg("icon.iconset")
+        .status()
+        .with_context(|| "Failed to run iconutil (is Xcode command-line tools installed?)")?;
+
+    if !status.success() {
+        anyhow::bail!("iconutil failed to create ICNS file");
+    }
+
+    fs::create_dir_all(resources_dir)?;
+    fs::copy(temp_dir.path().join("icon.icns"), dest_path)
+        .with_context(|| "Failed to copy generated icon.icns")?;
+
+    Ok(())
+}
+
 /// Writes `*.lproj/InfoPlist.strings` localisation files into `resources_dir`
 /// for every locale present in the settings' `osx_localizations` map.
 fn write_localizations(resources_dir: &Path, settings: &Settings) -> crate::Result<()> {
