@@ -433,6 +433,20 @@ fn create_icns_file(
         return Ok(None);
     }
 
+    // If one of the icon files is an SVG, convert it via resvg + iconutil.
+    for icon_path in settings.icon_files() {
+        let icon_path = icon_path?;
+        if icon_path.extension() == Some(OsStr::new("svg")) {
+            fs::create_dir_all(resources_dir)?;
+            let mut dest_path = resources_dir.clone();
+            dest_path.push(settings.bundle_name());
+            dest_path.set_extension("icns");
+            create_icns_from_svg(&icon_path, resources_dir, &dest_path)
+                .with_context(|| format!("Failed to convert SVG icon {icon_path:?} to ICNS"))?;
+            return Ok(Some(dest_path));
+        }
+    }
+
     // If one of the icon files is already an ICNS file, just use that.
     for icon_path in settings.icon_files() {
         let icon_path = icon_path?;
@@ -474,7 +488,7 @@ fn create_icns_file(
     for icon_path in settings.icon_files() {
         let icon_path = icon_path?;
         if icon_path.extension() == Some(OsStr::new("svg")) {
-            continue; // TODO: convert svg to appropriate format?
+            continue;
         }
         let icon = image::open(&icon_path)?;
         let density = if common::is_retina(&icon_path) { 2 } else { 1 };
