@@ -226,7 +226,7 @@ fn embed_svg_icons(
 
 fn pad_to_four_byte_alignment(buffer: &mut Vec<u8>) {
     const FOUR_BYTE_ALIGNMENT: usize = 4;
-    while buffer.len() % FOUR_BYTE_ALIGNMENT != 0 {
+    while !buffer.len().is_multiple_of(FOUR_BYTE_ALIGNMENT) {
         buffer.push(0);
     }
 }

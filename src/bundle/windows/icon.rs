@@ -74,8 +74,7 @@ impl Icon {
     pub fn encode(&self) -> io::Result<Vec<u8>> {
         let mut buffer = Cursor::new(Vec::new());
 
-        let and_mask_row_stride = ((self.width + AND_MASK_ROW_ALIGNMENT_BITS - 1)
-            / AND_MASK_ROW_ALIGNMENT_BITS)
+        let and_mask_row_stride = self.width.div_ceil(AND_MASK_ROW_ALIGNMENT_BITS)
             * BYTES_PER_DWORD;
         let and_mask_byte_size = and_mask_row_stride * self.height;
         let pixel_data_byte_size = self.width * self.height * BYTES_PER_BGRA_PIXEL;

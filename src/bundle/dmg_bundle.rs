@@ -6,7 +6,7 @@
 //
 //   <AppName>.dmg  (read-only compressed UDZO image)
 //     <AppName>.app   # the application bundle
-//     Applications -> /Applications  # drag-and-drop install target
+//     Applications TO /Applications
 //
 // Building requires macOS because the `hdiutil` command is used to create and
 // convert the disk image.
@@ -149,16 +149,10 @@ fn parse_mount_point(stdout: &[u8]) -> crate::Result<PathBuf> {
     parse_mount_point_impl(stdout)
 }
 
-/// Public re-export used only by tests in sibling modules.
-#[cfg(test)]
-pub fn parse_mount_point_pub(stdout: &[u8]) -> crate::Result<PathBuf> {
-    parse_mount_point_impl(stdout)
-}
-
 fn parse_mount_point_impl(stdout: &[u8]) -> crate::Result<PathBuf> {
     let text = std::str::from_utf8(stdout)?;
     // hdiutil attach prints a tab-separated line whose last field is the mount
-    // point, e.g.:  /dev/disk2s1   Apple_HFS  /Volumes/MyApp
+    // point, EXAMPLE:  /dev/disk2s1   Apple_HFS  /Volumes/MyApp
     for line in text.lines().rev() {
         let parts: Vec<&str> = line.split('\t').collect();
         if let Some(path) = parts.last() {
