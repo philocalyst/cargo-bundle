@@ -62,7 +62,7 @@ impl Icon {
                 let pixel_byte_offset = ((row * width + column) * BYTES_PER_BGRA_PIXEL) as usize;
                 bgra_data.push(rgba_pixels[pixel_byte_offset + 2]); // B
                 bgra_data.push(rgba_pixels[pixel_byte_offset + 1]); // G
-                bgra_data.push(rgba_pixels[pixel_byte_offset]);     // R
+                bgra_data.push(rgba_pixels[pixel_byte_offset]); // R
                 bgra_data.push(rgba_pixels[pixel_byte_offset + 3]); // A
             }
         }
@@ -131,9 +131,9 @@ mod tests {
         let icon = Icon::new_from_rgba(size, size, 1, blank_rgba(size));
         let encoded = icon.encode().unwrap();
 
-        let and_mask_row_stride =
-            ((size + AND_MASK_ROW_ALIGNMENT_BITS - 1) / AND_MASK_ROW_ALIGNMENT_BITS)
-                * BYTES_PER_DWORD;
+        let and_mask_row_stride = ((size + AND_MASK_ROW_ALIGNMENT_BITS - 1)
+            / AND_MASK_ROW_ALIGNMENT_BITS)
+            * BYTES_PER_DWORD;
         let expected = BITMAP_INFO_HEADER_BYTE_SIZE
             + (size * size * BYTES_PER_BGRA_PIXEL)
             + and_mask_row_stride * size;
@@ -164,7 +164,7 @@ mod tests {
         let encoded = icon.encode().unwrap();
 
         let first_pixel_offset = BITMAP_INFO_HEADER_BYTE_SIZE as usize;
-        assert_eq!(encoded[first_pixel_offset],     0x00); // B
+        assert_eq!(encoded[first_pixel_offset], 0x00); // B
         assert_eq!(encoded[first_pixel_offset + 1], 0x00); // G
         assert_eq!(encoded[first_pixel_offset + 2], 0xFF); // R
         assert_eq!(encoded[first_pixel_offset + 3], 0xFF); // A
