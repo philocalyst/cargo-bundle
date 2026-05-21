@@ -731,15 +731,26 @@ mod tests {
     fn dmg_round_trip() {
         use super::PackageType;
 
-        // Each new short name should parse back to the correct variant.
         assert_eq!(
             PackageType::from_short_name("dmg"),
             Some(PackageType::OsxDmg)
         );
 
-        // And Display / short_name should survive the round-trip.
         assert_eq!(PackageType::OsxDmg.short_name(), "dmg");
         assert_eq!(PackageType::OsxDmg.to_string(), "dmg");
+    }
+
+    #[test]
+    fn exe_round_trip() {
+        use super::PackageType;
+
+        assert_eq!(
+            PackageType::from_short_name("exe"),
+            Some(PackageType::WindowsBundle)
+        );
+
+        assert_eq!(PackageType::WindowsBundle.short_name(), "exe");
+        assert_eq!(PackageType::WindowsBundle.to_string(), "exe");
     }
 
     #[test]
@@ -747,6 +758,7 @@ mod tests {
         use super::PackageType;
         let all = PackageType::all();
         assert!(all.contains(&"dmg"), "dmg missing from PackageType::all()");
+        assert!(all.contains(&"exe"), "exe missing from PackageType::all()");
     }
 
     #[test]
