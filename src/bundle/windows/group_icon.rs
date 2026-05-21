@@ -1,18 +1,23 @@
+#[cfg(target_os = "windows")]
 use std::io::{self, Cursor, Write};
 
 /// Reserved field value required by the GRPICONDIR specification.
+#[cfg(target_os = "windows")]
 const ICON_DIRECTORY_RESERVED: u16 = 0;
 
 /// Type identifier distinguishing icon resources from cursor resources.
+#[cfg(target_os = "windows")]
 const ICON_DIRECTORY_TYPE_ICON: u16 = 1;
 
 /// An RT_GROUP_ICON resource that groups together individual RT_ICON entries.
+#[cfg(target_os = "windows")]
 pub struct GroupIcon {
     id_reserved: u16,
     id_type: u16,
     entries: Vec<GroupIconEntry>,
 }
 
+#[cfg(target_os = "windows")]
 pub struct GroupIconEntry {
     pub width: u8,
     pub height: u8,
@@ -24,6 +29,7 @@ pub struct GroupIconEntry {
     pub id: u16,
 }
 
+#[cfg(target_os = "windows")]
 impl Default for GroupIcon {
     fn default() -> Self {
         GroupIcon {
@@ -34,6 +40,7 @@ impl Default for GroupIcon {
     }
 }
 
+#[cfg(target_os = "windows")]
 impl GroupIcon {
     pub fn push_icon(&mut self, entry: GroupIconEntry) {
         self.entries.push(entry);

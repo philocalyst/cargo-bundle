@@ -8,34 +8,51 @@ use anyhow::Context;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::PathBuf;
+
+#[cfg(target_os = "windows")]
 use winres_edit::Resources;
 
+#[cfg(target_os = "windows")]
 use super::group_icon::GroupIcon;
+#[cfg(target_os = "windows")]
 use super::icon::Icon;
+#[cfg(target_os = "windows")]
 use resvg::tiny_skia::{Pixmap, Transform};
+#[cfg(target_os = "windows")]
 use resvg::usvg::{Options, Tree};
 
+#[cfg(target_os = "windows")]
 const ICON_PIXEL_SIZES: &[u32] = &[16, 24, 32, 48, 64, 96, 128, 256, 512];
 
+#[cfg(target_os = "windows")]
 const LANGUAGE_ID_ENGLISH_US: u16 = 0x0409;
 
+#[cfg(target_os = "windows")]
 const VERSION_NODE_DATA_TYPE_BINARY: u16 = 0;
+#[cfg(target_os = "windows")]
 const VERSION_NODE_DATA_TYPE_TEXT: u16 = 1;
 
 /// Windows PE resource type identifier for RT_GROUP_ICON.
+#[cfg(target_os = "windows")]
 const RT_GROUP_ICON_RESOURCE_TYPE: u16 = 14;
 
+#[cfg(target_os = "windows")]
 const APPLICATION_ICON_GROUP_RESOURCE_ID: u16 = 1;
+#[cfg(target_os = "windows")]
 const FIRST_INDIVIDUAL_ICON_RESOURCE_ID: u16 = 1;
+#[cfg(target_os = "windows")]
 const VERSION_RESOURCE_ID: u16 = 1;
 
 /// String table key encoding language 0x0409 (en-US) and code page 0x04B0 (Unicode UTF-16).
+#[cfg(target_os = "windows")]
 const STRING_TABLE_LOCALE_ENGLISH_US_UNICODE: &str = "040904B0";
 
 /// Translation record for English (US), code page 1200 (Unicode UTF-16 LE).
 /// Layout: [language_id_low, language_id_high, codepage_low, codepage_high]
+#[cfg(target_os = "windows")]
 const TRANSLATION_ENTRY_ENGLISH_US_UNICODE: [u8; 4] = [0x09, 0x04, 0xB0, 0x04];
 
+#[cfg(target_os = "windows")]
 const WINDOWS_VERSION_COMPONENT_COUNT: usize = 4;
 
 pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
@@ -80,6 +97,7 @@ fn embed_resources(
     }
 }
 
+#[cfg(target_os = "windows")]
 fn embed_resources_windows(
     settings: &Settings,
     exe_path: &std::path::Path,
@@ -104,6 +122,7 @@ fn embed_resources_windows(
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
 fn embed_version_info(
     settings: &Settings,
     resources: &winres_edit::Resources,
@@ -149,6 +168,7 @@ fn embed_version_info(
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
 fn embed_svg_icons(
     svg_path: &std::path::Path,
     resources: &winres_edit::Resources,
@@ -224,13 +244,15 @@ fn embed_svg_icons(
     Ok(())
 }
 
+#[cfg(target_os = "windows")]
 fn pad_to_four_byte_alignment(buffer: &mut Vec<u8>) {
     const FOUR_BYTE_ALIGNMENT: usize = 4;
-    while buffer.len() % FOUR_BYTE_ALIGNMENT != 0 {
+    while !buffer.len().is_multiple_of(FOUR_BYTE_ALIGNMENT) {
         buffer.push(0);
     }
 }
 
+#[cfg(target_os = "windows")]
 fn encode_null_terminated_utf16_le(text: &str) -> Vec<u8> {
     text.encode_utf16()
         .chain(std::iter::once(0u16))
@@ -238,10 +260,12 @@ fn encode_null_terminated_utf16_le(text: &str) -> Vec<u8> {
         .collect()
 }
 
+#[cfg(target_os = "windows")]
 fn pack_windows_version(major: u64, minor: u64, patch: u64, build: u64) -> u64 {
     (major << 48) | (minor << 32) | (patch << 16) | build
 }
 
+#[cfg(target_os = "windows")]
 fn build_fixed_file_info(file_version: u64, product_version: u64) -> Vec<u8> {
     /// Magic signature that identifies a VS_FIXEDFILEINFO structure.
     const VS_FIXED_FILE_INFO_SIGNATURE: u32 = 0xFEEF_04BD;
@@ -282,6 +306,7 @@ fn build_fixed_file_info(file_version: u64, product_version: u64) -> Vec<u8> {
     buffer
 }
 
+#[cfg(target_os = "windows")]
 fn parse_version(version_string: &str) -> u64 {
     let mut version_components = version_string
         .splitn(WINDOWS_VERSION_COMPONENT_COUNT, '.')
@@ -297,6 +322,7 @@ fn parse_version(version_string: &str) -> u64 {
 
 /// Builds a VS_VERSIONINFO node per the Windows SDK specification:
 /// <https://learn.microsoft.com/en-us/windows/win32/menurc/vs-versioninfo>
+#[cfg(target_os = "windows")]
 fn build_version_info_node(
     key: &str,
     value_bytes: &[u8],
@@ -321,6 +347,7 @@ fn build_version_info_node(
     buffer
 }
 
+#[cfg(target_os = "windows")]
 fn build_string_entry(key: &str, value: &str) -> Vec<u8> {
     let key_encoded = encode_null_terminated_utf16_le(key);
     let value_encoded = encode_null_terminated_utf16_le(value);
@@ -338,6 +365,7 @@ fn build_string_entry(key: &str, value: &str) -> Vec<u8> {
     buffer
 }
 
+#[cfg(target_os = "windows")]
 fn build_string_file_info(pairs: &[(&str, String)]) -> Vec<u8> {
     let mut string_entries = Vec::new();
     for (key, value) in pairs {
@@ -359,6 +387,7 @@ fn build_string_file_info(pairs: &[(&str, String)]) -> Vec<u8> {
     )
 }
 
+#[cfg(target_os = "windows")]
 fn build_var_file_info() -> Vec<u8> {
     let translation_node = build_version_info_node(
         "Translation",
@@ -374,6 +403,7 @@ fn build_var_file_info() -> Vec<u8> {
     )
 }
 
+#[cfg(target_os = "windows")]
 fn build_version_info_resource(
     settings: &Settings,
     string_pairs: &[(&str, String)],

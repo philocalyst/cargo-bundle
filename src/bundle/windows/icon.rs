@@ -1,25 +1,38 @@
+#[cfg(any(target_os = "windows", test))]
 use std::io::{self, Cursor, Write};
 
+#[cfg(target_os = "windows")]
 use super::group_icon::GroupIconEntry;
 
+#[cfg(any(target_os = "windows", test))]
 const BITMAP_INFO_HEADER_BYTE_SIZE: u32 = 40;
+#[cfg(any(target_os = "windows", test))]
 const DIB_SINGLE_COLOR_PLANE: u16 = 1;
+#[cfg(any(target_os = "windows", test))]
 const BITS_PER_BGRA_PIXEL: u16 = 32;
+#[cfg(any(target_os = "windows", test))]
 const BYTES_PER_BGRA_PIXEL: u32 = 4;
+#[cfg(any(target_os = "windows", test))]
 const BI_RGB_NO_COMPRESSION: u32 = 0;
 
 /// Bit width of one DWORD, used to compute the AND mask row stride.
+#[cfg(any(target_os = "windows", test))]
 const AND_MASK_ROW_ALIGNMENT_BITS: u32 = 32;
+#[cfg(any(target_os = "windows", test))]
 const BYTES_PER_DWORD: u32 = 4;
 
+#[cfg(any(target_os = "windows", test))]
 const UNUSED_PELS_PER_METER: i32 = 0;
+#[cfg(any(target_os = "windows", test))]
 const UNUSED_COLOR_TABLE_ENTRIES: u32 = 0;
 
 /// Offsets into the BITMAPINFOHEADER for the bits-per-pixel field, used in tests.
+#[cfg(any(target_os = "windows", test))]
 const BITMAPINFOHEADER_BITS_PER_PIXEL_OFFSET: usize = 14;
 
 /// A single icon entry stored as a BITMAPINFOHEADER + bottom-up BGRA pixels +
 /// AND mask, ready to be embedded as an RT_ICON resource in a PE file.
+#[cfg(any(target_os = "windows", test))]
 pub struct Icon {
     width: u32,
     height: u32,
@@ -34,6 +47,7 @@ pub struct Icon {
     pub icon_id: u16,
 }
 
+#[cfg(any(target_os = "windows", test))]
 impl Icon {
     pub fn new(width: u32, height: u32, icon_id: u16, image_data: Vec<u8>) -> Self {
         Icon {
@@ -74,9 +88,8 @@ impl Icon {
     pub fn encode(&self) -> io::Result<Vec<u8>> {
         let mut buffer = Cursor::new(Vec::new());
 
-        let and_mask_row_stride = ((self.width + AND_MASK_ROW_ALIGNMENT_BITS - 1)
-            / AND_MASK_ROW_ALIGNMENT_BITS)
-            * BYTES_PER_DWORD;
+        let and_mask_row_stride =
+            self.width.div_ceil(AND_MASK_ROW_ALIGNMENT_BITS) * BYTES_PER_DWORD;
         let and_mask_byte_size = and_mask_row_stride * self.height;
         let pixel_data_byte_size = self.width * self.height * BYTES_PER_BGRA_PIXEL;
 
@@ -103,6 +116,7 @@ impl Icon {
     }
 
     /// Return the `GroupIconEntry` that describes this icon in an `RT_GROUP_ICON` resource.
+    #[cfg(target_os = "windows")]
     pub fn group_icon_entry(&self) -> io::Result<GroupIconEntry> {
         Ok(GroupIconEntry {
             width: self.width as u8,
@@ -171,6 +185,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "windows")]
     fn group_icon_entry_reflects_icon_metadata() {
         let icon = Icon::new_from_rgba(48, 48, 5, blank_rgba(48));
         let entry = icon.group_icon_entry().unwrap();
