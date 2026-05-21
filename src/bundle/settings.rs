@@ -85,7 +85,9 @@ impl PackageType {
     }
 
     pub const fn all() -> &'static [&'static str] {
-        &["deb", "ios", "msi", "wxsmsi", "osx", "dmg", "rpm", "appimage"]
+        &[
+            "deb", "ios", "msi", "wxsmsi", "osx", "dmg", "rpm", "appimage",
+        ]
     }
 }
 
