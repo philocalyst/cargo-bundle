@@ -44,12 +44,11 @@ pub struct Icon {
     color_table_size: u32,
     important_color_count: u32,
     image_data: Vec<u8>,
-    pub icon_id: u16,
 }
 
 #[cfg(any(target_os = "windows", test))]
 impl Icon {
-    pub fn new(width: u32, height: u32, icon_id: u16, image_data: Vec<u8>) -> Self {
+    pub fn new(width: u32, height: u32, image_data: Vec<u8>) -> Self {
         Icon {
             width,
             height,
@@ -61,14 +60,13 @@ impl Icon {
             color_table_size: UNUSED_COLOR_TABLE_ENTRIES,
             important_color_count: UNUSED_COLOR_TABLE_ENTRIES,
             image_data,
-            icon_id,
         }
     }
 
     /// Build an `Icon` from raw RGBA pixel data (top-to-bottom row order).
     /// The data is converted to bottom-up BGRA order as required by the DIB
     /// format used in PE icon resources.
-    pub fn new_from_rgba(width: u32, height: u32, icon_id: u16, rgba_pixels: Vec<u8>) -> Self {
+    pub fn new_from_rgba(width: u32, height: u32, rgba_pixels: Vec<u8>) -> Self {
         let mut bgra_data = Vec::with_capacity((width * height * BYTES_PER_BGRA_PIXEL) as usize);
 
         for row in (0..height).rev() {
@@ -81,7 +79,7 @@ impl Icon {
             }
         }
 
-        Icon::new(width, height, icon_id, bgra_data)
+        Icon::new(width, height, bgra_data)
     }
 
     /// Encode this icon as a DIB (BITMAPINFOHEADER + pixel data + AND mask).
@@ -142,12 +140,10 @@ mod tests {
     #[test]
     fn icon_encode_length_is_deterministic() {
         let size = 16u32;
-        let icon = Icon::new_from_rgba(size, size, 1, blank_rgba(size));
+        let icon = Icon::new_from_rgba(size, size, blank_rgba(size));
         let encoded = icon.encode().unwrap();
 
-        let and_mask_row_stride = ((size + AND_MASK_ROW_ALIGNMENT_BITS - 1)
-            / AND_MASK_ROW_ALIGNMENT_BITS)
-            * BYTES_PER_DWORD;
+        let and_mask_row_stride = size.div_ceil(AND_MASK_ROW_ALIGNMENT_BITS) * BYTES_PER_DWORD;
         let expected = BITMAP_INFO_HEADER_BYTE_SIZE
             + (size * size * BYTES_PER_BGRA_PIXEL)
             + and_mask_row_stride * size;
@@ -156,7 +152,7 @@ mod tests {
 
     #[test]
     fn icon_encode_header_signature() {
-        let icon = Icon::new_from_rgba(32, 32, 2, blank_rgba(32));
+        let icon = Icon::new_from_rgba(32, 32, blank_rgba(32));
         let encoded = icon.encode().unwrap();
 
         let header_size = u32::from_le_bytes(encoded[0..4].try_into().unwrap());
@@ -174,7 +170,7 @@ mod tests {
     #[test]
     fn rgba_to_bgra_conversion() {
         let opaque_red_rgba = vec![0xFF, 0x00, 0x00, 0xFF];
-        let icon = Icon::new_from_rgba(1, 1, 1, opaque_red_rgba);
+        let icon = Icon::new_from_rgba(1, 1, opaque_red_rgba);
         let encoded = icon.encode().unwrap();
 
         let first_pixel_offset = BITMAP_INFO_HEADER_BYTE_SIZE as usize;
