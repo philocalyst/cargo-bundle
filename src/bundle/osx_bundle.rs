@@ -29,7 +29,7 @@ use std::cmp::min;
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::prelude::*;
-use std::io::{self, BufWriter};
+use std::io::{self, BufWriter, Cursor};
 use std::path::{Path, PathBuf};
 
 pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
@@ -435,7 +435,7 @@ fn create_icns_file(
         return Ok(None);
     }
 
-    // If one of the icon files is an SVG, convert it via resvg + iconutil.
+    // If one of the icon files is an SVG, convert it via resvg + icns crate.
     for icon_path in settings.icon_files() {
         let icon_path = icon_path?;
         if icon_path.extension() == Some(OsStr::new("svg")) {
@@ -522,8 +522,7 @@ fn create_icns_file(
     anyhow::bail!("No usable icon files found.");
 }
 
-/// Renders an SVG icon at standard macOS iconset sizes, then runs `iconutil`
-/// to produce an ICNS file at `dest_path`.
+/// Renders an SVG icon at standard macOS iconset sizes and produces an ICNS file at `dest_path`.
 fn create_icns_from_svg(
     svg_path: &Path,
     resources_dir: &Path,
@@ -532,13 +531,11 @@ fn create_icns_from_svg(
     let svg_data = fs::read_to_string(svg_path)
         .with_context(|| format!("Failed to read SVG file {svg_path:?}"))?;
 
-    let temp_dir = tempfile::tempdir().with_context(|| "Failed to create temp dir for iconset")?;
-    let iconset_dir = temp_dir.path().join("icon.iconset");
-    fs::create_dir_all(&iconset_dir)?;
-
     let opt = Options::default();
     let tree =
         Tree::from_data(svg_data.as_bytes(), &opt).with_context(|| "Failed to parse SVG data")?;
+
+    let mut family = icns::IconFamily::new();
 
     // Standard macOS iconset sizes: (logical_size, scale_factor)
     let sizes: &[(u32, u32)] = &[
@@ -556,13 +553,6 @@ fn create_icns_from_svg(
 
     for &(size, scale) in sizes {
         let pixel_size = size * scale;
-        let filename = if scale == 1 {
-            format!("icon_{size}x{size}.png")
-        } else {
-            format!("icon_{size}x{size}@{scale}x.png")
-        };
-        let output_path = iconset_dir.join(&filename);
-
         let mut pixmap = Pixmap::new(pixel_size, pixel_size)
             .with_context(|| format!("Failed to create {pixel_size}x{pixel_size} pixmap"))?;
         resvg::render(
@@ -573,26 +563,27 @@ fn create_icns_from_svg(
             ),
             &mut pixmap.as_mut(),
         );
-        pixmap
-            .save_png(&output_path)
-            .with_context(|| format!("Failed to save PNG {output_path:?}"))?;
-    }
 
-    let status = std::process::Command::new("iconutil")
-        .current_dir(temp_dir.path())
-        .arg("-c")
-        .arg("icns")
-        .arg("icon.iconset")
-        .status()
-        .with_context(|| "Failed to run iconutil (is Xcode command-line tools installed?)")?;
+        let png_data = pixmap
+            .encode_png()
+            .with_context(|| format!("Failed to encode {pixel_size}x{pixel_size} pixmap to PNG"))?;
 
-    if !status.success() {
-        anyhow::bail!("iconutil failed to create ICNS file");
+        let icon_image = icns::Image::read_png(Cursor::new(&png_data))
+            .with_context(|| format!("Failed to read PNG for {pixel_size}x{pixel_size} icon"))?;
+
+        let icon_type = icns::IconType::from_pixel_size_and_density(pixel_size, pixel_size, scale)
+            .with_context(|| format!("No ICNS icon type for size {size} and scale {scale}"))?;
+
+        family
+            .add_icon_with_type(&icon_image, icon_type)
+            .with_context(|| format!("Failed to add {size}x{size}@{scale}x icon to ICNS family"))?;
     }
 
     fs::create_dir_all(resources_dir)?;
-    fs::copy(temp_dir.path().join("icon.icns"), dest_path)
-        .with_context(|| "Failed to copy generated icon.icns")?;
+    let icns_file = BufWriter::new(File::create(dest_path)?);
+    family
+        .write(icns_file)
+        .with_context(|| format!("Failed to write ICNS file to {dest_path:?}"))?;
 
     Ok(())
 }
