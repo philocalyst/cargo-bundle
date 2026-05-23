@@ -20,6 +20,8 @@ use std::path::PathBuf;
 use std::process::Command;
 
 pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
+    const BUNDLE_MINIMUM: u64 = 52_428_800;
+
     let dmg_name = format!("{}.dmg", settings.bundle_name());
     common::print_bundling(&dmg_name)?;
 
@@ -46,7 +48,7 @@ pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
 
     // Determine the size of the app bundle and add a generous overhead.
     let bundle_size = dir_size(&app_bundle_path)?;
-    let image_size_bytes = (bundle_size + 52_428_800).max(52_428_800); // at least 50 MiB
+    let image_size_bytes = bundle_size + BUNDLE_MINIMUM; // at least 50 MiB
 
     let temp_dir = tempfile::tempdir()
         .with_context(|| "Failed to create temporary directory for DMG staging")?;
