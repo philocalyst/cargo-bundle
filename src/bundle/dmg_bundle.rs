@@ -144,13 +144,9 @@ fn dir_size(dir: &std::path::Path) -> crate::Result<u64> {
     Ok(total)
 }
 
-/// Extract the mount point path from `hdiutil attach` stdout.
 fn parse_mount_point(stdout: &[u8]) -> crate::Result<PathBuf> {
-    parse_mount_point_impl(stdout)
-}
-
-fn parse_mount_point_impl(stdout: &[u8]) -> crate::Result<PathBuf> {
     let text = std::str::from_utf8(stdout)?;
+
     // hdiutil attach prints a tab-separated line whose last field is the mount
     // point, e.g.:  /dev/disk2s1   Apple_HFS  /Volumes/MyApp
     for line in text.lines().rev() {
@@ -162,5 +158,6 @@ fn parse_mount_point_impl(stdout: &[u8]) -> crate::Result<PathBuf> {
             }
         }
     }
+
     anyhow::bail!("Could not find a /Volumes/… mount point in hdiutil output")
 }
