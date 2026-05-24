@@ -9,6 +9,17 @@ description = "Wrap rust executables in OS-specific app bundles"
 edition = "2024"
 readme = "Readme.md"
 
+[package.metadata.bundle.example.goodbye]
+name = "Goodbye"
+identifier = "io.github.burtonageo.cargo-bundle.goodbye"
+icon = ["examples/goodbye/icon32x32.png", "examples/goodbye/icon128x128.png"]
+category = "Developer Tool"
+short_description = "An example CLI application showing PNG icon bundling"
+long_description = """
+A simple command-line application that demonstrates bundling a Rust binary
+with PNG icons using cargo-bundle.
+"""
+
 [package.metadata.bundle.example.hello]
 name = "hello"
 identifier = "io.github.burtonageo.cargo-bundle.hello"
@@ -59,3 +70,7 @@ winit = "0.30.13"
 [[example]]
 name = "hello"
 path = "examples/hello/main.rs"
+
+[[example]]
+name = "goodbye"
+path = "examples/goodbye/main.rs"
