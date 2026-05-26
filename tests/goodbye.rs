@@ -1,11 +1,11 @@
 mod common;
 
-use std::fs;
 use std::process::Command;
 
 #[test]
 #[cfg(target_os = "macos")]
 fn osx() {
+    use std::fs;
     common::setup_example_binary("goodbye");
 
     let root = common::project_root();
