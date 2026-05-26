@@ -23,11 +23,13 @@ use crate::Settings;
 use anyhow::Context;
 use image::imageops::FilterType::Lanczos3;
 use image::{self, GenericImageView};
+use resvg::tiny_skia::{Pixmap, Transform};
+use resvg::usvg::{Options, Tree};
 use std::cmp::min;
 use std::ffi::OsStr;
 use std::fs::{self, File};
 use std::io::prelude::*;
-use std::io::{self, BufWriter};
+use std::io::{self, BufWriter, Cursor};
 use std::path::{Path, PathBuf};
 
 pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
@@ -433,6 +435,20 @@ fn create_icns_file(
         return Ok(None);
     }
 
+    // If one of the icon files is an SVG, convert it via resvg + icns crate.
+    for icon_path in settings.icon_files() {
+        let icon_path = icon_path?;
+        if icon_path.extension() == Some(OsStr::new("svg")) {
+            fs::create_dir_all(resources_dir)?;
+            let mut dest_path = resources_dir.clone();
+            dest_path.push(settings.bundle_name());
+            dest_path.set_extension("icns");
+            create_icns_from_svg(&icon_path, resources_dir, &dest_path)
+                .with_context(|| format!("Failed to convert SVG icon {icon_path:?} to ICNS"))?;
+            return Ok(Some(dest_path));
+        }
+    }
+
     // If one of the icon files is already an ICNS file, just use that.
     for icon_path in settings.icon_files() {
         let icon_path = icon_path?;
@@ -474,7 +490,7 @@ fn create_icns_file(
     for icon_path in settings.icon_files() {
         let icon_path = icon_path?;
         if icon_path.extension() == Some(OsStr::new("svg")) {
-            continue; // TODO: convert svg to appropriate format?
+            continue;
         }
         let icon = image::open(&icon_path)?;
         let density = if common::is_retina(&icon_path) { 2 } else { 1 };
@@ -504,6 +520,72 @@ fn create_icns_file(
     }
 
     anyhow::bail!("No usable icon files found.");
+}
+
+/// Renders an SVG icon at standard macOS iconset sizes and produces an ICNS file at `dest_path`.
+fn create_icns_from_svg(
+    svg_path: &Path,
+    resources_dir: &Path,
+    dest_path: &Path,
+) -> crate::Result<()> {
+    let svg_data = fs::read_to_string(svg_path)
+        .with_context(|| format!("Failed to read SVG file {svg_path:?}"))?;
+
+    let opt = Options::default();
+    let tree =
+        Tree::from_data(svg_data.as_bytes(), &opt).with_context(|| "Failed to parse SVG data")?;
+
+    let mut family = icns::IconFamily::new();
+
+    // Standard macOS iconset sizes: (logical_size, scale_factor)
+    let sizes: &[(u32, u32)] = &[
+        (16, 1),
+        (16, 2),
+        (32, 1),
+        (32, 2),
+        (128, 1),
+        (128, 2),
+        (256, 1),
+        (256, 2),
+        (512, 1),
+        (512, 2),
+    ];
+
+    for &(size, scale) in sizes {
+        let pixel_size = size * scale;
+        let mut pixmap = Pixmap::new(pixel_size, pixel_size)
+            .with_context(|| format!("Failed to create {pixel_size}x{pixel_size} pixmap"))?;
+        resvg::render(
+            &tree,
+            Transform::from_scale(
+                pixel_size as f32 / tree.size().width(),
+                pixel_size as f32 / tree.size().height(),
+            ),
+            &mut pixmap.as_mut(),
+        );
+
+        let png_data = pixmap
+            .encode_png()
+            .with_context(|| format!("Failed to encode {pixel_size}x{pixel_size} pixmap to PNG"))?;
+
+        let icon_image = icns::Image::read_png(Cursor::new(&png_data))
+            .with_context(|| format!("Failed to read PNG for {pixel_size}x{pixel_size} icon"))?;
+
+        let icon_type = icns::IconType::from_pixel_size_and_density(pixel_size, pixel_size, scale)
+            .with_context(|| format!("No ICNS icon type for size {size} and scale {scale}"))?;
+
+        family
+            .add_icon_with_type(&icon_image, icon_type)
+            .with_context(|| format!("Failed to add {size}x{size}@{scale}x icon to ICNS family"))?;
+    }
+
+    fs::create_dir_all(resources_dir)?;
+    let icns_file = BufWriter::new(File::create(dest_path)?);
+    family
+        .write(icns_file)
+        .with_context(|| format!("Failed to write ICNS file to {dest_path:?}"))?;
+
+    Ok(())
 }
 
 /// Writes `*.lproj/InfoPlist.strings` localisation files into `resources_dir`
