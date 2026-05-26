@@ -55,17 +55,9 @@ fn deb() {
         String::from_utf8_lossy(&output.stderr)
     );
 
-    let arch = if cfg!(target_arch = "x86_64") {
-        "amd64"
-    } else if cfg!(target_arch = "aarch64") {
-        "arm64"
-    } else {
-        "amd64"
-    };
-
-    let deb_path = root.join(format!(
-        "target/debug/examples/bundle/deb/goodbye_0.9.1_{arch}.deb"
-    ));
+    let bundle_paths = common::parse_bundle_paths(&String::from_utf8_lossy(&output.stdout));
+    assert_eq!(bundle_paths.len(), 1, "Expected exactly one bundle path");
+    let deb_path = &bundle_paths[0];
     assert!(
         deb_path.exists(),
         "Debian package not found at {:?}",
@@ -73,9 +65,11 @@ fn deb() {
     );
 
     // The 128x128 PNG should have been placed in the hicolor icon tree.
-    let icon_path = root.join(format!(
-        "target/debug/examples/bundle/deb/goodbye_0.9.1_{arch}/data/usr/share/icons/hicolor/128x128/apps/goodbye.png"
-    ));
+    let package_dir = deb_path
+        .parent()
+        .unwrap()
+        .join(deb_path.file_stem().unwrap());
+    let icon_path = package_dir.join("data/usr/share/icons/hicolor/128x128/apps/goodbye.png");
     assert!(
         icon_path.exists(),
         "PNG icon not found in deb data at {:?}",

@@ -9,6 +9,16 @@ pub fn cargo_bundle_bin() -> PathBuf {
     project_root().join("target/debug/cargo-bundle")
 }
 
+#[cfg(test)]
+#[allow(dead_code)] // Used in tests
+pub fn parse_bundle_paths(stdout: &str) -> Vec<PathBuf> {
+    stdout
+        .lines()
+        .filter(|line| line.starts_with("        "))
+        .map(|line| PathBuf::from(line.trim()))
+        .collect()
+}
+
 /// Places a valid-enough binary at `target/debug/examples/<name>` so that
 /// cargo-bundle (running with CARGO_BUNDLE_SKIP_BUILD) has something to package.
 pub fn setup_example_binary(name: &str) {
