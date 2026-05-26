@@ -197,18 +197,13 @@ fn embed_svg_icons(
             &mut pixmap.as_mut(),
         );
 
-        let icon = Icon::new_from_rgba(
-            pixel_size,
-            pixel_size,
-            icon_resource_id,
-            pixmap.data().to_vec(),
-        );
+        let icon = Icon::new_from_rgba(pixel_size, pixel_size, pixmap.data().to_vec());
         let encoded_icon = icon
             .encode()
             .with_context(|| format!("Failed to encode {pixel_size}×{pixel_size} icon"))?;
 
         group_icon.push_icon(
-            icon.group_icon_entry()
+            icon.group_icon_entry(icon_resource_id)
                 .with_context(|| "Failed to build group icon entry")?,
         );
 

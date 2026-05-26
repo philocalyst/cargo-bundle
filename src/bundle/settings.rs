@@ -123,6 +123,7 @@ struct BundleSettings {
     osx_minimum_system_version: Option<String>,
     osx_url_schemes: Option<Vec<String>>,
     osx_info_plist_exts: Option<Vec<String>>,
+    osx_localizations: Option<HashMap<String, HashMap<String, String>>>,
     // Bundles for other binaries/examples:
     bin: Option<HashMap<String, BundleSettings>>,
     example: Option<HashMap<String, BundleSettings>>,

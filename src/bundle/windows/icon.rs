@@ -115,7 +115,7 @@ impl Icon {
 
     /// Return the `GroupIconEntry` that describes this icon in an `RT_GROUP_ICON` resource.
     #[cfg(target_os = "windows")]
-    pub fn group_icon_entry(&self) -> io::Result<GroupIconEntry> {
+    pub fn group_icon_entry(&self, id: u16) -> io::Result<GroupIconEntry> {
         Ok(GroupIconEntry {
             width: self.width as u8,
             height: self.height as u8,
@@ -124,7 +124,7 @@ impl Icon {
             planes: self.planes,
             bit_count: self.bits_per_pixel,
             bytes_in_resource: self.encode()?.len() as u32,
-            id: self.icon_id,
+            id,
         })
     }
 }
@@ -183,8 +183,8 @@ mod tests {
     #[test]
     #[cfg(target_os = "windows")]
     fn group_icon_entry_reflects_icon_metadata() {
-        let icon = Icon::new_from_rgba(48, 48, 5, blank_rgba(48));
-        let entry = icon.group_icon_entry().unwrap();
+        let icon = Icon::new_from_rgba(48, 48, blank_rgba(48));
+        let entry = icon.group_icon_entry(5).unwrap();
         assert_eq!(entry.width, 48);
         assert_eq!(entry.height, 48);
         assert_eq!(entry.id, 5);
