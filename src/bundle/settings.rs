@@ -12,6 +12,7 @@ use target_build_utils::TargetInfo;
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PackageType {
     OsxBundle,
+    OsxDmg,
     IosBundle,
     WindowsMsi,
     WxsMsi,
@@ -63,6 +64,7 @@ impl PackageType {
             "msi" => Some(PackageType::WindowsMsi),
             "wxsmsi" => Some(PackageType::WxsMsi),
             "osx" => Some(PackageType::OsxBundle),
+            "dmg" => Some(PackageType::OsxDmg),
             "rpm" => Some(PackageType::Rpm),
             "appimage" => Some(PackageType::AppImage),
             _ => None,
@@ -76,13 +78,16 @@ impl PackageType {
             PackageType::WindowsMsi => "msi",
             PackageType::WxsMsi => "wxsmsi",
             PackageType::OsxBundle => "osx",
+            PackageType::OsxDmg => "dmg",
             PackageType::Rpm => "rpm",
             PackageType::AppImage => "appimage",
         }
     }
 
     pub const fn all() -> &'static [&'static str] {
-        &["deb", "ios", "msi", "wxsmsi", "osx", "rpm", "appimage"]
+        &[
+            "deb", "ios", "msi", "wxsmsi", "osx", "dmg", "rpm", "appimage",
+        ]
     }
 }
 
@@ -115,6 +120,7 @@ struct BundleSettings {
     osx_minimum_system_version: Option<String>,
     osx_url_schemes: Option<Vec<String>>,
     osx_info_plist_exts: Option<Vec<String>>,
+    osx_localizations: Option<HashMap<String, HashMap<String, String>>>,
     // Bundles for other binaries/examples:
     bin: Option<HashMap<String, BundleSettings>>,
     example: Option<HashMap<String, BundleSettings>>,
@@ -357,7 +363,7 @@ impl Settings {
                 std::env::consts::OS
             };
             match target_os {
-                "macos" => Ok(vec![PackageType::OsxBundle]),
+                "macos" => Ok(vec![PackageType::OsxBundle, PackageType::OsxDmg]),
                 "ios" => Ok(vec![PackageType::IosBundle]),
                 "linux" => Ok(vec![PackageType::Deb, PackageType::AppImage]), // TODO: Do Rpm too, once it's implemented.
                 "windows" => Ok(vec![PackageType::WindowsMsi]),
@@ -561,6 +567,14 @@ impl Settings {
             None => ResourcePaths::new(&[], false),
         }
     }
+
+    /// Returns a map of locale codes to key-value localisation strings for
+    /// macOS `*.lproj/InfoPlist.strings` files.  The outer key is a locale
+    /// code such as `"fr"` or `"de"` and the inner map contains plist string
+    /// keys such as `"CFBundleDisplayName"` mapped to their translated value.
+    pub fn osx_localizations(&self) -> Option<&HashMap<String, HashMap<String, String>>> {
+        self.bundle_settings.osx_localizations.as_ref()
+    }
 }
 
 fn bundle_settings_from_table(
@@ -708,5 +722,42 @@ mod tests {
         assert!(examples.contains_key("baz"));
         let baz: &BundleSettings = examples.get("baz").unwrap();
         assert_eq!(baz.name, Some("Baz Example".to_string()));
+    }
+
+    #[test]
+    fn dmg_round_trip() {
+        use super::PackageType;
+
+        // Each new short name should parse back to the correct variant.
+        assert_eq!(
+            PackageType::from_short_name("dmg"),
+            Some(PackageType::OsxDmg)
+        );
+
+        // And Display / short_name should survive the round-trip.
+        assert_eq!(PackageType::OsxDmg.short_name(), "dmg");
+        assert_eq!(PackageType::OsxDmg.to_string(), "dmg");
+    }
+
+    #[test]
+    fn all_package_types_are_listed() {
+        use super::PackageType;
+        let all = PackageType::all();
+        assert!(all.contains(&"dmg"), "dmg missing from PackageType::all()");
+    }
+
+    #[test]
+    fn osx_localizations_parses_from_toml() {
+        let toml_str = r#"
+            [osx_localizations.fr]
+            CFBundleDisplayName = "Mon Application"
+
+            [osx_localizations.de]
+            CFBundleDisplayName = "Meine Anwendung"
+        "#;
+        let bundle: BundleSettings = toml::from_str(toml_str).unwrap();
+        let locs = bundle.osx_localizations.unwrap();
+        assert_eq!(locs["fr"]["CFBundleDisplayName"], "Mon Application");
+        assert_eq!(locs["de"]["CFBundleDisplayName"], "Meine Anwendung");
     }
 }

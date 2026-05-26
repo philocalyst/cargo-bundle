@@ -31,12 +31,15 @@ use std::io::{self, BufWriter};
 use std::path::{Path, PathBuf};
 
 pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
+    let base_dir = settings.project_out_directory().join("bundle/osx");
+    let path = bundle_project_at(settings, &base_dir)?;
+    Ok(vec![path])
+}
+
+pub fn bundle_project_at(settings: &Settings, output_dir: &Path) -> crate::Result<PathBuf> {
     let app_bundle_name = format!("{}.app", settings.bundle_name());
     common::print_bundling(&app_bundle_name)?;
-    let app_bundle_path = settings
-        .project_out_directory()
-        .join("bundle/osx")
-        .join(&app_bundle_name);
+    let app_bundle_path = output_dir.join(&app_bundle_name);
     if app_bundle_path.exists() {
         fs::remove_dir_all(&app_bundle_path)
             .with_context(|| format!("Failed to remove old {app_bundle_name}"))?;
@@ -70,11 +73,14 @@ pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
     copy_binary_to_bundle(&bundle_directory, settings)
         .with_context(|| format!("Failed to copy binary from {:?}", settings.binary_path()))?;
 
+    write_localizations(&resources_dir, settings)
+        .with_context(|| "Failed to write localisation files")?;
+
     if copied > 0 {
         add_rpath(&bundle_directory, settings)?;
     }
 
-    Ok(vec![app_bundle_path])
+    Ok(app_bundle_path)
 }
 
 #[allow(dead_code)]
@@ -498,6 +504,31 @@ fn create_icns_file(
     }
 
     anyhow::bail!("No usable icon files found.");
+}
+
+/// Writes `*.lproj/InfoPlist.strings` localisation files into `resources_dir`
+/// for every locale present in the settings' `osx_localizations` map.
+fn write_localizations(resources_dir: &Path, settings: &Settings) -> crate::Result<()> {
+    let Some(localizations) = settings.osx_localizations() else {
+        return Ok(());
+    };
+
+    for (locale, strings) in localizations {
+        let lproj_dir = resources_dir.join(locale).with_extension("lproj");
+        fs::create_dir_all(&lproj_dir)
+            .with_context(|| format!("Failed to create {lproj_dir:?}"))?;
+
+        let strings_path = lproj_dir.join("InfoPlist.strings");
+        let file = &mut common::create_file(&strings_path)?;
+        for (key, value) in strings {
+            // Escape embedded double-quotes in the value.
+            let escaped = value.replace('\\', "\\\\").replace('"', "\\\"");
+            writeln!(file, "{key} = \"{escaped}\";")?;
+        }
+        file.flush()?;
+    }
+
+    Ok(())
 }
 
 /// Converts an image::DynamicImage into an icns::Image.
