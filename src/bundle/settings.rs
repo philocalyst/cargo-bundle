@@ -16,6 +16,7 @@ pub enum PackageType {
     IosBundle,
     WindowsMsi,
     WxsMsi,
+    WindowsBundle,
     Deb,
     Rpm,
     AppImage,
@@ -67,6 +68,7 @@ impl PackageType {
             "dmg" => Some(PackageType::OsxDmg),
             "rpm" => Some(PackageType::Rpm),
             "appimage" => Some(PackageType::AppImage),
+            "exe" => Some(PackageType::WindowsBundle),
             _ => None,
         }
     }
@@ -81,12 +83,13 @@ impl PackageType {
             PackageType::OsxDmg => "dmg",
             PackageType::Rpm => "rpm",
             PackageType::AppImage => "appimage",
+            PackageType::WindowsBundle => "exe",
         }
     }
 
     pub const fn all() -> &'static [&'static str] {
         &[
-            "deb", "ios", "msi", "wxsmsi", "osx", "dmg", "rpm", "appimage",
+            "deb", "ios", "msi", "wxsmsi", "osx", "dmg", "rpm", "appimage", "exe",
         ]
     }
 }
@@ -206,7 +209,9 @@ impl Settings {
             ),
         };
         let binary_extension = match package_type {
-            Some(PackageType::WindowsMsi) | Some(PackageType::WxsMsi) => ".exe",
+            Some(PackageType::WindowsMsi)
+            | Some(PackageType::WxsMsi)
+            | Some(PackageType::WindowsBundle) => ".exe",
             _ => "",
         };
         binary_name += binary_extension;
@@ -366,7 +371,7 @@ impl Settings {
                 "macos" => Ok(vec![PackageType::OsxBundle, PackageType::OsxDmg]),
                 "ios" => Ok(vec![PackageType::IosBundle]),
                 "linux" => Ok(vec![PackageType::Deb, PackageType::AppImage]), // TODO: Do Rpm too, once it's implemented.
-                "windows" => Ok(vec![PackageType::WindowsMsi]),
+                "windows" => Ok(vec![PackageType::WindowsMsi, PackageType::WindowsBundle]),
                 os => anyhow::bail!("Native {} bundles not yet supported.", os),
             }
         }
@@ -740,10 +745,24 @@ mod tests {
     }
 
     #[test]
+    fn exe_round_trip() {
+        use super::PackageType;
+
+        assert_eq!(
+            PackageType::from_short_name("exe"),
+            Some(PackageType::WindowsBundle)
+        );
+
+        assert_eq!(PackageType::WindowsBundle.short_name(), "exe");
+        assert_eq!(PackageType::WindowsBundle.to_string(), "exe");
+    }
+
+    #[test]
     fn all_package_types_are_listed() {
         use super::PackageType;
         let all = PackageType::all();
         assert!(all.contains(&"dmg"), "dmg missing from PackageType::all()");
+        assert!(all.contains(&"exe"), "exe missing from PackageType::all()");
     }
 
     #[test]
