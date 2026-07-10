@@ -6,6 +6,8 @@ mod linux;
 mod msi_bundle;
 mod osx_bundle;
 mod settings;
+#[cfg(target_os = "windows")]
+mod windows;
 mod wxsmsi_bundle;
 
 pub use self::common::{print_error, print_finished};
@@ -23,6 +25,16 @@ pub fn bundle_project(settings: Settings) -> crate::Result<Vec<PathBuf>> {
             PackageType::IosBundle => ios_bundle::bundle_project(&settings)?,
             PackageType::WindowsMsi => msi_bundle::bundle_project(&settings)?,
             PackageType::WxsMsi => wxsmsi_bundle::bundle_project(&settings)?,
+            PackageType::WindowsBundle => {
+                #[cfg(target_os = "windows")]
+                {
+                    windows::exe_bundle::bundle_project(&settings)?
+                }
+                #[cfg(not(target_os = "windows"))]
+                {
+                    anyhow::bail!(".exe bundling is only supported on Windows hosts");
+                }
+            }
             PackageType::Deb => deb_bundle::bundle_project(&settings)?,
             PackageType::Rpm => rpm_bundle::bundle_project(&settings)?,
             PackageType::AppImage => appimage_bundle::bundle_project(&settings)?,
