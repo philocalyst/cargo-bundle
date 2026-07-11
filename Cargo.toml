@@ -12,8 +12,13 @@ readme = "Readme.md"
 [package.metadata.bundle.example.goodbye]
 name = "Goodbye"
 identifier = "io.github.burtonageo.cargo-bundle.goodbye"
-icon = ["examples/goodbye/icon32x32.png", "examples/goodbye/icon128x128.png"]
+icon = [
+    "examples/goodbye/icon.svg",
+    "examples/goodbye/icon32x32.png",
+    "examples/goodbye/icon128x128.png",
+]
 category = "Developer Tool"
+copyright = "Copyright (c) 2026 The cargo-bundle developers"
 short_description = "An example CLI application showing PNG icon bundling"
 long_description = """
 A simple command-line application that demonstrates bundling a Rust binary
