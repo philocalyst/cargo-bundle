@@ -191,7 +191,9 @@ pub fn print_warning(message: &str) -> crate::Result<()> {
             output.fg(term::color::YELLOW)?;
         }
         write!(output, "warning:")?;
-        output.reset()?;
+        if output.supports_reset() {
+            output.reset()?;
+        }
         writeln!(output, " {message}")?;
         output.flush()?;
         Ok(())
