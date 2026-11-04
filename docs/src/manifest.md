@@ -50,6 +50,11 @@ suggestion when a close match is available.
 
 ## Platform shadowing
 
+`apple_provisioning_profile` accepts a path to an existing Apple profile.
+The original bytes are embedded before signing; see
+[provisioning profiles](signing/apple.md#provisioning-profiles) for trust and
+distribution responsibilities.
+
 Shared values go at the root. A platform table replaces only the fields it
 sets; omitted fields keep their root value. A supplied array or table replaces
 the whole value. An empty array explicitly removes the shared list:

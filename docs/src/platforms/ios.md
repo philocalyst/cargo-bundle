@@ -81,19 +81,22 @@ Application UI translations must be supplied by the app and its resources.
 
 ## Signing and distribution
 
-Supply your certificate and entitlements to package a signed app
+Supply your certificate, profile, and entitlements to package a signed app
 without prompts:
 
 ```toml
 [package.metadata.bundle.ios]
 apple_signing_p12 = "secrets/distribution.p12"
 apple_signing_password_env = "APPLE_SIGNING_PASSWORD"
+apple_provisioning_profile = "secrets/App.mobileprovision"
 apple_signing_entitlements = "packaging/App.entitlements"
 ```
 
-Certificate and entitlement paths are relative to the working directory.
-Supply concrete identity and capability entitlements for your distribution
-workflow; cargo-bundle passes the requested values to `apple-codesign`.
+Profile paths, like certificate paths, are relative to the working directory.
+Cargo-bundle embeds the supplied profile as `embedded.mobileprovision` and
+signs with the provided entitlements. Supply concrete app and team identifiers
+in the entitlements file when needed. See
+[Apple signing](../signing/apple.md#provisioning-profiles) for details.
 
 ## Create an IPA
 

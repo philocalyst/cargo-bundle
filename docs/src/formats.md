@@ -12,7 +12,7 @@ mean a finished backend: `rpm` is accepted by the parser but panics when used.
 | `exe` | Windows executable copy | Implemented; PE icon/version editing requires a Windows host. |
 | `msi` | Windows installer | Experimental native MSI writer. |
 | `wxsmsi` | Windows installer through WiX | Experimental; requires `dotnet` and restoration of the generated project's WiX SDK packages. |
-| `ios` | iOS `.app` directory | Experimental; optional Apple signing. |
+| `ios` | iOS `.app` directory | Experimental; optional Apple signing and profile embedding. |
 | `ipa` | iOS application archive | Experimental; Rust ZIP writer; requires an iOS device target. |
 | `apk` | Android application | NativeActivity shared library; Rust resource compilation, alignment and optional signing. |
 | `rpm` | None | Not implemented. |

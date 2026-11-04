@@ -88,3 +88,26 @@ spctl --assess --type execute --verbose=2 target/release/bundle/osx/Example.app
 Use the printed output path if yours differs. For a disk image, also run
 the fstool UDIF checksum verifier on the final DMG.
 
+## Provisioning profiles
+
+Set `apple_provisioning_profile` to an existing Apple-issued profile. It is
+embedded before signing: `embedded.mobileprovision` for iOS, or
+`Contents/embedded.provisionprofile` for macOS. Paths are relative to the
+working directory, and platform tables can override the setting.
+
+Cargo-bundle embeds the supplied profile bytes unchanged. It does not check
+the profile's signature, expiration, signing identity, platform, or entitlement
+authorization. Supply a profile appropriate for your app, signing certificate,
+platform, and distribution channel. Apple validates provisioning when the app
+is installed or distributed.
+
+For signing, provide an XML entitlements plist with the concrete claims your
+app needs, including any required app and team identifiers. Cargo-bundle does
+not derive or expand those claims from the profile. See Apple's
+[profile reference](https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles)
+for platform rules; macOS apps without restricted entitlements generally do not
+need a profile, except for TestFlight distribution.
+
+The [`ipa` format](../platforms/ios.md#create-an-ipa) archives the iOS app after
+embedding and signing. Notarization is for macOS; it is rejected for both
+`ios` and `ipa`. Creating an IPA does not submit it to App Store Connect.
