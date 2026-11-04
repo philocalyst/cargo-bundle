@@ -1,13 +1,17 @@
+mod apple_trust;
 mod category;
 mod common;
 mod dmg_bundle;
 #[cfg(unix)]
 mod dmg_finder;
+mod entitlements;
 mod ios_bundle;
+mod ipa_bundle;
 mod linux;
 mod localization;
 mod msi_bundle;
 mod osx_bundle;
+mod provisioning;
 mod settings;
 mod signing;
 mod windows;
@@ -19,26 +23,40 @@ use crate::bundle::linux::{appimage, deb_bundle, rpm_bundle};
 use std::path::PathBuf;
 
 pub fn bundle_project(settings: Settings) -> crate::Result<Vec<PathBuf>> {
-    let mut paths = Vec::new();
-    for package_type in settings.package_types()? {
-        let mut package_paths = match package_type {
-            PackageType::OsxBundle => osx_bundle::bundle_project(&settings)?,
-            PackageType::OsxDmg => dmg_bundle::bundle_project(&settings)?,
-            PackageType::IosBundle => ios_bundle::bundle_project(&settings)?,
-            PackageType::WindowsMsi => msi_bundle::bundle_project(&settings)?,
-            PackageType::WxsMsi => wxsmsi_bundle::bundle_project(&settings)?,
-            PackageType::WindowsBundle => windows::exe_bundle::bundle_project(&settings)?,
-            PackageType::Deb => deb_bundle::bundle_project(&settings)?,
-            PackageType::Rpm => rpm_bundle::bundle_project(&settings)?,
-            PackageType::AppImage => appimage::bundle_project(&settings)?,
-        };
-        if matches!(
-            package_type,
-            PackageType::Deb | PackageType::Rpm | PackageType::AppImage
-        ) {
-            signing::sign_linux_artifacts(&settings, &mut package_paths)?;
+    let package_type = settings.package_type();
+    let macos = matches!(package_type, PackageType::OsxBundle | PackageType::OsxDmg);
+    if settings.apple_notarization_api_key().is_some()
+        && matches!(package_type, PackageType::IosBundle | PackageType::IosIpa)
+    {
+        anyhow::bail!(
+            "Apple notarization is supported for macOS bundles and DMGs, not iOS bundles or IPAs"
+        );
+    }
+    if macos {
+        signing::validate_apple_notarization(&settings)?;
+    }
+    let mut paths = match package_type {
+        PackageType::OsxBundle => osx_bundle::bundle_project(&settings)?,
+        PackageType::OsxDmg => dmg_bundle::bundle_project(&settings)?,
+        PackageType::IosBundle => ios_bundle::bundle_project(&settings)?,
+        PackageType::IosIpa => ipa_bundle::bundle_project(&settings)?,
+        PackageType::WindowsMsi => msi_bundle::bundle_project(&settings)?,
+        PackageType::WxsMsi => wxsmsi_bundle::bundle_project(&settings)?,
+        PackageType::WindowsBundle => windows::exe_bundle::bundle_project(&settings)?,
+        PackageType::Deb => deb_bundle::bundle_project(&settings)?,
+        PackageType::Rpm => rpm_bundle::bundle_project(&settings)?,
+        PackageType::AppImage => appimage::bundle_project(&settings)?,
+    };
+    if macos {
+        for path in &paths {
+            signing::notarize_apple_path(&settings, path)?;
         }
-        paths.append(&mut package_paths);
+    }
+    if matches!(
+        package_type,
+        PackageType::Deb | PackageType::Rpm | PackageType::AppImage
+    ) {
+        signing::sign_linux_artifacts(&settings, &mut paths)?;
     }
     Ok(paths)
 }

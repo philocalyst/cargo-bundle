@@ -2,7 +2,6 @@ mod bundle;
 
 use crate::bundle::{BuildArtifact, PackageType, Settings, bundle_project};
 use anyhow::Result;
-use clap::builder::{PossibleValuesParser, TypedValueParser};
 use std::env;
 use std::ffi::OsString;
 use std::path::PathBuf;
@@ -27,7 +26,7 @@ fn about_info() -> String {
         "{}\n{}\n{}",
         version_info!(),
         clap::crate_authors!(", "),
-        "Bundle Rust executables into OS bundles",
+        "Bundle Rust executables into OS packages",
     )
 }
 
@@ -43,7 +42,7 @@ pub struct Cli {
     pub example: Option<String>,
 
     /// Which bundle format to produce
-    #[arg(short, long, value_name = "FORMAT", value_parser = PossibleValuesParser::new(PackageType::all()).map(|s| PackageType::try_from(s).unwrap()))]
+    #[arg(short, long, value_name = "FORMAT", value_enum)]
     pub format: Option<PackageType>,
 
     /// Build a bundle from a target built in release mode
@@ -54,12 +53,11 @@ pub struct Cli {
     #[arg(long, value_name = "NAME", conflicts_with = "release")]
     pub profile: Option<String>,
 
-    /// Bundle this already-built executable instead of running `cargo build`
+    /// Bundle a prebuilt executable instead of running `cargo build`
     #[arg(long, value_name = "PATH")]
     pub binary_path: Option<PathBuf>,
 
-    /// Build a bundle for the target triple. May be repeated to combine
-    /// several architectures into a universal binary (macOS only).
+    /// Build a bundle for the target triple; repeat for a universal macOS binary.
     #[arg(short, long, value_name = "TRIPLE")]
     pub target: Vec<String>,
 
@@ -105,9 +103,21 @@ fn build_project_if_unbuilt(settings: &Settings) -> crate::Result<()> {
 
 /// Runs a single `cargo build`, optionally for an explicit target triple.
 fn build_target(settings: &Settings, triple: Option<&str>) -> crate::Result<()> {
+    let status = build_target_command(settings, triple).status()?;
+    if !status.success() {
+        anyhow::bail!(
+            "Result of `cargo build` operation was unsuccessful: {}",
+            status
+        );
+    }
+    Ok(())
+}
+
+fn build_target_command(settings: &Settings, triple: Option<&str>) -> process::Command {
     let mut cargo =
         process::Command::new(env::var_os("CARGO").unwrap_or_else(|| OsString::from("cargo")));
     cargo.arg("build");
+    cargo.arg(format!("--package={}", settings.package_name()));
     if let Some(triple) = triple {
         cargo.arg(format!("--target={triple}"));
     }
@@ -139,14 +149,7 @@ fn build_target(settings: &Settings, triple: Option<&str>) -> crate::Result<()> 
     if settings.no_default_features() {
         cargo.arg("--no-default-features");
     }
-    let status = cargo.status()?;
-    if !status.success() {
-        anyhow::bail!(
-            "Result of `cargo build` operation was unsuccessful: {}",
-            status
-        );
-    }
-    Ok(())
+    cargo
 }
 
 /// Merges the per-target binaries into one universal binary with `lipo`.
@@ -180,7 +183,7 @@ fn run() -> crate::Result<()> {
     if args.len() > 1 && args[1] == "bundle" {
         args.remove(1);
     }
-    let cli = <Cli as clap::Parser>::parse_from(args); // <Cli as clap::Parser>::parse();
+    let cli = <Cli as clap::Parser>::parse_from(args);
 
     {
         let output_paths = env::current_dir()
@@ -200,5 +203,65 @@ fn main() {
     if let Err(error) = run() {
         bundle::print_error(&error).unwrap();
         std::process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use clap::Parser;
+    use std::fs;
+
+    #[test]
+    fn cargo_build_command_selects_the_requested_workspace_package() {
+        let workspace = tempfile::tempdir().unwrap();
+        fs::create_dir_all(workspace.path().join("apps/selected/src")).unwrap();
+        fs::create_dir_all(workspace.path().join("apps/other/src")).unwrap();
+        fs::write(
+            workspace.path().join("Cargo.toml"),
+            "[workspace]\nmembers = [\"apps/selected\", \"apps/other\"]\nresolver = \"2\"\n",
+        )
+        .unwrap();
+        fs::write(
+            workspace.path().join("apps/selected/Cargo.toml"),
+            "[package]\nname = \"selected\"\nversion = \"1.0.0\"\nedition = \"2024\"\n[package.metadata.bundle]\nidentifier = \"org.example.selected\"\n",
+        )
+        .unwrap();
+        fs::write(
+            workspace.path().join("apps/selected/src/main.rs"),
+            "fn main() {}\n",
+        )
+        .unwrap();
+        fs::write(
+            workspace.path().join("apps/other/Cargo.toml"),
+            "[package]\nname = \"other\"\nversion = \"1.0.0\"\nedition = \"2024\"\n",
+        )
+        .unwrap();
+        fs::write(
+            workspace.path().join("apps/other/src/lib.rs"),
+            "pub fn unrelated() {}\n",
+        )
+        .unwrap();
+        let prebuilt = workspace.path().join("prebuilt");
+        fs::write(&prebuilt, b"not inspected by settings").unwrap();
+        let cli = Cli::try_parse_from([
+            "cargo-bundle",
+            "--package",
+            "selected",
+            "--format",
+            "deb",
+            "--binary-path",
+            prebuilt.to_str().unwrap(),
+        ])
+        .unwrap();
+        let settings = Settings::new(workspace.path().to_path_buf(), &cli).unwrap();
+        let arguments = build_target_command(&settings, None)
+            .get_args()
+            .map(|argument| argument.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+
+        assert_eq!(settings.package_name(), "selected");
+        assert!(arguments.contains(&"--package=selected".to_owned()));
+        assert!(!arguments.contains(&"--lib".to_owned()));
     }
 }
