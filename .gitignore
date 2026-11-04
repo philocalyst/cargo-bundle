@@ -6,3 +6,6 @@ target
 .DS_Store
 *.rs.bk
 *~
+
+# Rendered mdBook output
+/docs/book/

@@ -1,0 +1,6 @@
+/* Keep mdBook's themes and navigation; allow room for reference tables. */
+:root { --content-max-width: 800px; }
+.content { line-height: 1.65; }
+.content table { display: block; overflow-x: auto; }
+.content pre { line-height: 1.5; }
+@media print { .content table { display: table; } }

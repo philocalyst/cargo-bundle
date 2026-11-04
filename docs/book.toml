@@ -1,0 +1,21 @@
+[book]
+title = "The cargo-bundle guide"
+description = "Build app bundles and installers from Rust executables."
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+create-missing = false
+
+[output.html]
+git-repository-url = "https://github.com/philocalyst/cargo-bundle"
+edit-url-template = "https://github.com/philocalyst/cargo-bundle/edit/master/docs/{path}"
+site-url = "/cargo-bundle/"
+default-theme = "light"
+preferred-dark-theme = "navy"
+additional-css = ["theme/guide.css"]
+
+[output.html.fold]
+enable = true
+level = 1
