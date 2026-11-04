@@ -1,10 +1,9 @@
 //! macOS `*.lproj/InfoPlist.strings` localization.
 
-use super::sorted_locales;
+use super::{normalized_locale_code, validate_locale_codes};
 use crate::bundle::common;
 use anyhow::Context;
-use std::borrow::Cow;
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::io::Write;
 use std::path::Path;
@@ -30,8 +29,9 @@ impl<'a> OsxLocalizations<'a> {
     /// Writes `*.lproj/InfoPlist.strings` under the provided `output_root`
     /// (typically `Contents/Resources`).
     pub fn write_to_directory(&self, output_root: &Path) -> crate::Result<()> {
-        for (locale_code, strings_mapping) in sorted_locales(self.localized_strings) {
-            self.write_single_locale_directory(output_root, locale_code, strings_mapping)?;
+        let locales = normalized_locales(self.localized_strings)?;
+        for (locale_code, strings_mapping) in locales {
+            self.write_single_locale_directory(output_root, &locale_code, strings_mapping)?;
         }
         Ok(())
     }
@@ -43,7 +43,7 @@ impl<'a> OsxLocalizations<'a> {
         locale_code: &str,
         strings_mapping: &HashMap<String, String>,
     ) -> crate::Result<()> {
-        let localization_directory = output_root.join(locale_code).with_extension("lproj");
+        let localization_directory = output_root.join(format!("{locale_code}.lproj"));
 
         fs::create_dir_all(&localization_directory).with_context(|| {
             format!("Failed to create localization directory at {localization_directory:?}")
@@ -63,10 +63,13 @@ impl<'a> OsxLocalizations<'a> {
         output_file: &mut impl Write,
         strings_mapping: &HashMap<String, String>,
     ) -> crate::Result<()> {
-        for (key, value) in strings_mapping {
+        let mut pairs: Vec<_> = strings_mapping.iter().collect();
+        pairs.sort_by(|a, b| a.0.cmp(b.0));
+        for (key, value) in pairs {
             writeln!(
                 output_file,
-                "{key} = \"{}\";",
+                "\"{}\" = \"{}\";",
+                escape_legacy_apple_string(key),
                 escape_legacy_apple_string(value)
             )?;
         }
@@ -75,20 +78,45 @@ impl<'a> OsxLocalizations<'a> {
 }
 
 /// Escapes embedded backslashes and double-quotes for the legacy `.strings` file format.
-fn escape_legacy_apple_string(value: &str) -> Cow<'_, str> {
-    if !value.contains(['\\', '"']) {
-        return Cow::Borrowed(value);
-    }
-
-    let mut escaped_string = String::with_capacity(value.len() + 2);
+fn escape_legacy_apple_string(value: &str) -> String {
+    let mut escaped_string = String::with_capacity(value.len());
     for character in value.chars() {
         match character {
             '\\' => escaped_string.push_str(r"\\"),
             '"' => escaped_string.push_str(r#"\""#),
+            '\n' => escaped_string.push_str(r"\n"),
+            '\r' => escaped_string.push_str(r"\r"),
+            '\t' => escaped_string.push_str(r"\t"),
+            '\u{0008}' => escaped_string.push_str(r"\b"),
+            '\u{000c}' => escaped_string.push_str(r"\f"),
+            c if c.is_control() => {
+                use std::fmt::Write as _;
+                write!(&mut escaped_string, "\\U{:04X}", c as u32).unwrap();
+            }
             _ => escaped_string.push(character),
         }
     }
-    Cow::Owned(escaped_string)
+    escaped_string
+}
+
+/// Validate the path component and reject locale encodings that collapse to
+/// the same Apple `.lproj` directory.
+fn normalized_locales(
+    strings: &HashMap<String, HashMap<String, String>>,
+) -> crate::Result<BTreeMap<String, &HashMap<String, String>>> {
+    let mut entries: Vec<_> = strings.iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
+    validate_locale_codes(entries.iter().map(|(locale, _)| locale.as_str()))?;
+    let mut locales = BTreeMap::new();
+    for (locale, mapping) in entries {
+        let normalized = normalized_locale_code(locale);
+        if locales.insert(normalized.clone(), mapping).is_some() {
+            anyhow::bail!(
+                "Multiple localization codes resolve to the Apple locale directory {normalized:?}"
+            );
+        }
+    }
+    Ok(locales)
 }
 
 #[cfg(test)]
@@ -121,7 +149,7 @@ mod tests {
                 .join("fr.lproj/InfoPlist.strings"),
         )
         .unwrap();
-        assert!(french_output.contains(r#"CFBundleDisplayName = "Mon Application";"#));
+        assert!(french_output.contains(r#""CFBundleDisplayName" = "Mon Application";"#));
 
         let german_output = std::fs::read_to_string(
             temporary_directory
@@ -129,7 +157,7 @@ mod tests {
                 .join("de.lproj/InfoPlist.strings"),
         )
         .unwrap();
-        assert!(german_output.contains(r#"CFBundleDisplayName = "Meine Anwendung";"#));
+        assert!(german_output.contains(r#""CFBundleDisplayName" = "Meine Anwendung";"#));
     }
 
     #[test]
@@ -153,6 +181,47 @@ mod tests {
                 .join("en.lproj/InfoPlist.strings"),
         )
         .unwrap();
-        assert!(english_output.contains(r#"CFBundleName = "Say \"hi\"";"#));
+        assert!(english_output.contains(r#""CFBundleName" = "Say \"hi\"";"#));
+    }
+
+    #[test]
+    fn sorts_and_escapes_keys_values_and_controls() {
+        let localized_strings = HashMap::from([(
+            "en".to_string(),
+            HashMap::from([
+                ("z\"key".into(), "line\n\t\u{0001}".into()),
+                ("a".into(), "back\\slash".into()),
+            ]),
+        )]);
+        let localizations = OsxLocalizations::new(&localized_strings);
+        let temporary_directory = tempdir().unwrap();
+        localizations
+            .write_to_directory(temporary_directory.path())
+            .unwrap();
+        let output = fs::read_to_string(
+            temporary_directory
+                .path()
+                .join("en.lproj/InfoPlist.strings"),
+        )
+        .unwrap();
+        assert_eq!(
+            output,
+            "\"a\" = \"back\\\\slash\";\n\"z\\\"key\" = \"line\\n\\t\\U0001\";\n"
+        );
+    }
+
+    #[test]
+    fn rejects_unsafe_and_colliding_locale_codes() {
+        for locale in ["../escape", "a/b", "a\\b", ".."] {
+            let localized_strings = HashMap::from([(locale.to_string(), HashMap::new())]);
+            let localizations = OsxLocalizations::new(&localized_strings);
+            assert!(localizations.write_to_directory(Path::new("/tmp")).is_err());
+        }
+        let localized_strings = HashMap::from([
+            ("en.UTF-8".to_string(), HashMap::new()),
+            ("en".to_string(), HashMap::new()),
+        ]);
+        let localizations = OsxLocalizations::new(&localized_strings);
+        assert!(localizations.write_to_directory(Path::new("/tmp")).is_err());
     }
 }

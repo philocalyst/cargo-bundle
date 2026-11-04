@@ -23,6 +23,7 @@ pub enum DesktopKeywords {
 /// so the manifest mirrors the generated desktop file. Only `localestring` keys
 /// are supported here; non-localizable keys (`Exec`, `Icon`, …) stay global.
 #[derive(Clone, Debug, Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct LinuxDesktopLocale {
     #[serde(rename = "Name", default)]
     pub name: Option<String>,
@@ -49,7 +50,9 @@ impl<'a> LinuxDesktopLocalizations<'a> {
     }
 
     /// Locales sorted by code for deterministic artifact output.
-    pub fn sorted_locales(&self) -> std::collections::BTreeMap<&'a str, &'a LinuxDesktopLocale> {
+    pub fn sorted_locales(
+        &self,
+    ) -> std::collections::BTreeMap<std::borrow::Cow<'a, str>, &'a LinuxDesktopLocale> {
         sorted_locales(self.locale_mapping)
     }
 
@@ -66,15 +69,17 @@ impl<'a> LinuxDesktopLocalizations<'a> {
         &self,
         extract_field: impl Fn(&'a LinuxDesktopLocale) -> Option<&'a T>,
     ) -> Option<&'a T> {
+        let locales = self.sorted_locales();
         FALLBACK_LOCALE_PREFERENCE
             .iter()
             .find_map(|preferred_locale| {
-                self.locale_mapping
+                locales
                     .get(*preferred_locale)
+                    .copied()
                     .and_then(&extract_field)
             })
             .or_else(move || {
-                self.sorted_locales()
+                locales
                     .values()
                     .find_map(|locale_data| extract_field(locale_data))
             })
@@ -133,19 +138,19 @@ impl<'a> LinuxDesktopLocalizations<'a> {
             self.append_single_localized_entry(
                 output_buffer,
                 "Name",
-                locale_code,
+                &locale_code,
                 locale_data.name.as_deref(),
             );
             self.append_single_localized_entry(
                 output_buffer,
                 "GenericName",
-                locale_code,
+                &locale_code,
                 locale_data.generic_name.as_deref(),
             );
             self.append_single_localized_entry(
                 output_buffer,
                 "Comment",
-                locale_code,
+                &locale_code,
                 locale_data.comment.as_deref(),
             );
 
@@ -160,7 +165,7 @@ impl<'a> LinuxDesktopLocalizations<'a> {
             self.append_single_localized_entry(
                 output_buffer,
                 "Icon",
-                locale_code,
+                &locale_code,
                 locale_data.icon.as_deref(),
             );
         }
@@ -305,7 +310,7 @@ mod tests {
     }
 
     #[test]
-    fn fallback_prefers_en_over_first_sorted() {
+    fn fallback_prefers_normalized_en_over_first_sorted() {
         let mut locale_mapping = HashMap::new();
         locale_mapping.insert(
             "fr".to_string(),
@@ -316,10 +321,17 @@ mod tests {
             },
         );
         locale_mapping.insert(
-            "en".to_string(),
+            "en.UTF-8".to_string(),
             LinuxDesktopLocale {
                 icon: None,
                 generic_name: Some("Utility".into()),
+                ..Default::default()
+            },
+        );
+        locale_mapping.insert(
+            "de".to_string(),
+            LinuxDesktopLocale {
+                generic_name: Some("Dienstprogramm".into()),
                 ..Default::default()
             },
         );
