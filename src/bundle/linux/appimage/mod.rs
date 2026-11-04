@@ -5,16 +5,15 @@
 //! A type-2 AppImage is:
 //!   `[ELF type2 runtime][SquashFS 4.0 payload]`
 //!
-//! The runtime (from the AppImage project) mounts the SquashFS with FUSE and
-//! executes `AppRun` at the root of the resulting AppDir. The payload is a
-//! standard little-endian SquashFS 4.0 image; gzip compression is used for
-//! maximum compatibility with older kernels / squashfuse builds.
+//! The embedded, statically linked Rust launcher extracts the SquashFS into a
+//! private temporary directory, runs `AppRun`, and cleans up after it exits.
+//! It does not require FUSE, mount helpers, or external extraction tools.
 //!
 //! # SquashFS strategy
 //!
 //! SquashFS images are assembled by the pure-Rust [`appimage`] crate. No
-//! external `mksquashfs` binary is required; the official runtime is downloaded
-//! and cached automatically for the target architecture.
+//! external `mksquashfs` binary or runtime download is required. The library
+//! embeds launchers for each supported target architecture.
 //!
 //! # Layout
 //!
@@ -34,7 +33,6 @@
 mod app_dir;
 mod arch;
 mod context;
-mod runtime;
 
 use crate::bundle::{Settings, common};
 use anyhow::Context;
@@ -56,13 +54,28 @@ pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
 
     let app_directory = AppDirectory::build(settings, &context)?;
     let architecture = arch::determine_appimage_architecture(settings.binary_arch())?;
-    let runtime_bytes = runtime::read(architecture)?;
+    let candidate = tempfile::NamedTempFile::new_in(
+        context
+            .package_path
+            .parent()
+            .context("AppImage output has no parent")?,
+    )?
+    .into_temp_path();
     appimage::AppImage::pack(&app_directory.path)
-        .runtime(runtime_bytes)
+        .target_arch(architecture)
         .compression(compression(settings)?)
-        .write_to(&context.package_path)
+        .write_to(&candidate)
         .map_err(anyhow::Error::from)
         .with_context(|| format!("Failed to assemble {}", context.package_path.display()))?;
+
+    std::fs::OpenOptions::new()
+        .write(true)
+        .open(&candidate)?
+        .sync_all()?;
+    candidate
+        .persist(&context.package_path)
+        .map_err(|error| error.error)
+        .context("Failed to publish completed AppImage")?;
 
     Ok(vec![context.package_path.clone()])
 }

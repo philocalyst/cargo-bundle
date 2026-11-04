@@ -44,7 +44,6 @@ cargo-bundle's support for bundling crate examples.
 
 [package.metadata.bundle.example.hello.osx]
 dmg_background = "examples/hello/dmg-background.svg"
-[workspace]
 
 [features]
 # Enables Windows Authenticode signing through `osslsigncode`. The vendored
@@ -67,7 +66,6 @@ dirs = "6.0.0"
 ds_parser = "0.4.0"
 glob = "0.3.3"
 goblin = "0.10"
-ld-so-cache = "0.1.0"
 icns = "0.4.0"
 image = { version = "0.25.10", features = ["png"] }
 libflate = "2.2.1"
@@ -75,10 +73,6 @@ md5 = "0.8.0"
 msi = "0.10.0"
 plist = "1.10.0"
 quick-xml = { version = "0.39.2", features = ["serialize"] }
-reqwest = { version = "0.13.2", features = [
-    "blocking",
-    "native-tls",
-], default-features = false }
 tempfile = "3.27.0"
 resvg = "0.45"
 serde = "1.0.228"
@@ -95,7 +89,7 @@ walkdir = "2.5.0"
 zip = { version = "2.6.1", default-features = false, features = ["deflate"] }
 alias_record = "0.3.0"
 fstool = { version = "0.5.2", default-features = false, features = ["std", "hfs-plus", "dmg", "dmg-write-zlib"] }
-appimage = { package = "appimage-rs", version = "0.1.0" }
+appimage = { package = "appimage-rs", version = "0.1.0", path = "../appimage-rs" }
 apple-codesign = { version = "0.29.0", default-features = false }
 cryptographic-message-syntax = "0.27.0"
 der = { version = "0.7.10", features = ["std"] }
@@ -106,6 +100,9 @@ osslsigncode = { version = "0.1.2", optional = true }
 # Sigstore's split signing crate replaces the 0.14 monolith.
 sigstore-sign = { version = "0.15.1", default-features = false, features = ["native-tls", "tuf", "aws-lc-rs"] }
 tokio = { version = "1", features = ["rt-multi-thread"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+ld-so-cache = "0.1.0"
 
 [target.'cfg(target_os = "windows")'.dependencies]
 resvg = "0.45"
