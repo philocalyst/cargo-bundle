@@ -24,6 +24,7 @@ use std::process::Command;
 const MINIMUM_BUNDLE_SIZE_BYTES: u64 = 52_428_800; // 50 MiB
 
 pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
+    common::validate_bundle_name(settings.bundle_name())?;
     let disk_image_name = format!("{}.dmg", settings.bundle_name());
     common::print_bundling(&disk_image_name)?;
 
