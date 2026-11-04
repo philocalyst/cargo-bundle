@@ -40,6 +40,7 @@ pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
 }
 
 pub fn bundle_project_at(settings: &Settings, output_dir: &Path) -> crate::Result<PathBuf> {
+    common::validate_bundle_name(settings.bundle_name())?;
     let app_bundle_name = format!("{}.app", settings.bundle_name());
     common::print_bundling(&app_bundle_name)?;
     let app_bundle_path = output_dir.join(&app_bundle_name);
@@ -86,7 +87,7 @@ pub fn bundle_project_at(settings: &Settings, output_dir: &Path) -> crate::Resul
         add_rpath(&bundle_directory, settings)?;
     }
 
-    signing::sign_apple_path(settings, &app_bundle_path)?;
+    signing::sign_apple_bundle(settings, &app_bundle_path)?;
 
     Ok(app_bundle_path)
 }

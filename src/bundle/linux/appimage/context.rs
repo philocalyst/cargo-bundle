@@ -41,9 +41,6 @@ impl AppImageContext {
             fs::remove_dir_all(&self.package_directory)
                 .with_context(|| "Failed to remove old package directory")?;
         }
-        if self.package_path.exists() {
-            let _ = fs::remove_file(&self.package_path);
-        }
         Ok(())
     }
 }
