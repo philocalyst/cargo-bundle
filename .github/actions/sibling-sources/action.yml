@@ -1,0 +1,18 @@
+name: Check out sibling crate sources
+description: Clone configured sibling repositories and check out exact commit SHAs
+inputs:
+  appimage-url:
+    description: Git clone URL for appimage-rs
+    required: true
+  appimage-ref:
+    description: Full 40-character commit SHA for appimage-rs
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Clone and check out sibling crates
+      shell: bash
+      env:
+        APPIMAGE_RS_URL: ${{ inputs.appimage-url }}
+        APPIMAGE_RS_REF: ${{ inputs.appimage-ref }}
+      run: python cargo-bundle/scripts/checkout-sibling-sources.py
