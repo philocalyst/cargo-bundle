@@ -51,9 +51,7 @@ fn sign_apple_path_inner(settings: &Settings, path: &Path, bundle: bool) -> crat
             .map_err(|error| anyhow::anyhow!("Invalid Apple signing timestamp URL: {error}"))?;
     }
     if bundle && let Some(entitlements_path) = settings.apple_signing_entitlements() {
-        let entitlements = std::fs::read_to_string(entitlements_path).with_context(|| {
-            format!("Failed to read Apple signing entitlements {entitlements_path:?}")
-        })?;
+        let entitlements = super::entitlements::read(entitlements_path)?;
         signing_settings
             .set_entitlements_xml(SettingsScope::Main, entitlements)
             .map_err(|error| anyhow::anyhow!("Invalid Apple signing entitlements: {error}"))?;
