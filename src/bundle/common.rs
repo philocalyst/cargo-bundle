@@ -4,6 +4,20 @@ use std::fs::{self, File};
 use std::io::{self, BufWriter, Write};
 use std::path::{Component, Path, PathBuf};
 
+/// A display name used as a bundle directory must not escape its output tree.
+pub fn validate_bundle_name(name: &str) -> crate::Result<()> {
+    anyhow::ensure!(
+        !name.is_empty()
+            && !name.contains(['/', '\\', '\0'])
+            && matches!(
+                Path::new(name).components().collect::<Vec<_>>().as_slice(),
+                [Component::Normal(_)]
+            ),
+        "Bundle name must be a single filename: {name:?}"
+    );
+    Ok(())
+}
+
 /// Returns true if the path has a filename indicating that it is a high-desity
 /// "retina" icon.  Specifically, returns true the the file stem ends with
 /// "@2x" (a convention specified by the [Apple developer docs](
@@ -191,7 +205,9 @@ pub fn print_warning(message: &str) -> crate::Result<()> {
             output.fg(term::color::YELLOW)?;
         }
         write!(output, "warning:")?;
-        output.reset()?;
+        if output.supports_reset() {
+            output.reset()?;
+        }
         writeln!(output, " {message}")?;
         output.flush()?;
         Ok(())
