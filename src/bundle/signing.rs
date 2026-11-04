@@ -84,7 +84,9 @@ pub fn sign_windows_artifact(settings: &Settings, artifact_path: &Path) -> crate
                     "Windows signing certificate password environment variable `{variable}` is not set"
                 )
             })?),
-            None => Secret::Prompt,
+            // Passwordless P12 files use the empty password. Never prompt in a
+            // build pipeline: the user may be running cargo-bundle unattended.
+            None => Secret::value(String::new()),
         };
         let credential = Credential::pkcs12(&config.certificate_path, secret);
         let parent = artifact_path.parent().ok_or_else(|| {
