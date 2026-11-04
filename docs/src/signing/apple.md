@@ -16,7 +16,7 @@ apple_signing_p12 = "certs/developer-id.p12"
 apple_signing_password_env = "APPLE_SIGNING_PASSWORD"
 apple_signing_timestamp_url = "http://timestamp.apple.com/ts01"
 apple_signing_hardened_runtime = true
-# Optional XML entitlements plist:
+# Optional XML or binary entitlements plist:
 # apple_signing_entitlements = "packaging/Example.entitlements"
 ```
 
@@ -101,12 +101,16 @@ authorization. Supply a profile appropriate for your app, signing certificate,
 platform, and distribution channel. Apple validates provisioning when the app
 is installed or distributed.
 
-For signing, provide an XML entitlements plist with the concrete claims your
+For signing, provide an XML or binary plist dictionary with the concrete claims your
 app needs, including any required app and team identifiers. Cargo-bundle does
 not derive or expand those claims from the profile. See Apple's
 [profile reference](https://developer.apple.com/documentation/technotes/tn3125-inside-code-signing-provisioning-profiles)
 for platform rules; macOS apps without restricted entitlements generally do not
 need a profile, except for TestFlight distribution.
+
+The `plist` crate reads the dictionary and `apple-codesign` encodes the signing
+entitlements. Cargo-bundle preserves explicitly supplied values, including
+arrays and nested dictionaries; it does not infer grants or expand placeholders.
 
 The [`ipa` format](../platforms/ios.md#create-an-ipa) archives the iOS app after
 embedding and signing. Notarization is for macOS; it is rejected for both
