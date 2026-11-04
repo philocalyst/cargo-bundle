@@ -117,12 +117,70 @@ fn ipa_cli_preserves_permissions_and_previous_archive_on_failure() {
     let manifest = temp.path().join("Cargo.toml");
     let contents = fs::read_to_string(&manifest).unwrap().replace(
         "[package.metadata.bundle.ios]\n",
-        "[package.metadata.bundle.ios]\napple_signing_p12 = \"missing.p12\"\n",
+        "[package.metadata.bundle.ios]\napple_provisioning_profile = \"device.mobileprovision\"\n",
     );
     fs::write(manifest, contents).unwrap();
     let output = bundle(temp.path(), &binary, "ipa", "aarch64-apple-ios");
     assert!(!output.status.success());
     assert_eq!(fs::read(ipa_path).unwrap(), original);
+}
+
+#[test]
+fn apple_bundles_embed_original_profile_bytes() {
+    let temp = tempfile::tempdir().unwrap();
+    let binary = project(temp.path());
+    let profile = include_bytes!("fixtures/apple/fastlane-test.mobileprovision");
+    fs::write(temp.path().join("device.mobileprovision"), profile).unwrap();
+    let manifest = temp.path().join("Cargo.toml");
+    let contents = fs::read_to_string(&manifest).unwrap().replace(
+        "identifier = \"com.example.postcard\"",
+        "identifier = \"com.example.postcard\"\napple_provisioning_profile = \"device.mobileprovision\"",
+    );
+    fs::write(manifest, contents).unwrap();
+    for (format, target, embedded) in [
+        ("ios", "aarch64-apple-ios", "embedded.mobileprovision"),
+        (
+            "osx",
+            "aarch64-apple-darwin",
+            "Contents/embedded.provisionprofile",
+        ),
+    ] {
+        let output = bundle(temp.path(), &binary, format, target);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let path = temp
+            .path()
+            .join("target")
+            .join(target)
+            .join("debug/bundle")
+            .join(format)
+            .join("Post.Card.app")
+            .join(embedded);
+        assert_eq!(fs::read(path).unwrap(), profile);
+    }
+    // Profiles are opaque inputs: cargo-bundle does not attempt to authenticate them.
+    let opaque = b"arbitrary profile bytes\0\xff";
+    fs::write(temp.path().join("device.mobileprovision"), opaque).unwrap();
+    let output = bundle(temp.path(), &binary, "ipa", "aarch64-apple-ios");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let archive_path = temp
+        .path()
+        .join("target/aarch64-apple-ios/debug/bundle/ipa/Post.Card.ipa");
+    let mut archive = zip::ZipArchive::new(fs::File::open(archive_path).unwrap()).unwrap();
+    let mut embedded = Vec::new();
+    archive
+        .by_name("Payload/Post.Card.app/embedded.mobileprovision")
+        .unwrap()
+        .read_to_end(&mut embedded)
+        .unwrap();
+    assert_eq!(embedded, opaque);
 }
 
 #[test]
@@ -238,6 +296,11 @@ fn ipa_signing_seals_the_app_before_archiving() {
         .unwrap();
     fs::write(&binary, macho).unwrap();
     signing_identity(&temp.path().join("identity.p12"));
+    fs::write(
+        temp.path().join("device.mobileprovision"),
+        b"opaque profile",
+    )
+    .unwrap();
     let mut requested = plist::Dictionary::new();
     requested.insert("get-task-allow".into(), plist::Value::Boolean(true));
     plist::Value::Dictionary(requested.clone())
@@ -246,7 +309,7 @@ fn ipa_signing_seals_the_app_before_archiving() {
     let manifest = temp.path().join("Cargo.toml");
     let contents = fs::read_to_string(&manifest).unwrap().replace(
         "[package.metadata.bundle.ios]\n",
-        "[package.metadata.bundle.ios]\napple_signing_p12 = \"identity.p12\"\napple_signing_entitlements = \"entitlements.plist\"\n",
+        "[package.metadata.bundle.ios]\napple_signing_p12 = \"identity.p12\"\napple_provisioning_profile = \"device.mobileprovision\"\napple_signing_entitlements = \"entitlements.plist\"\n",
     );
     fs::write(manifest, contents).unwrap();
     let output = bundle(temp.path(), &binary, "ipa", "aarch64-apple-ios");
@@ -261,6 +324,13 @@ fn ipa_signing_seals_the_app_before_archiving() {
     )
     .unwrap();
     let mut archive = zip::ZipArchive::new(file).unwrap();
+    let mut embedded = Vec::new();
+    archive
+        .by_name("Payload/Post.Card.app/embedded.mobileprovision")
+        .unwrap()
+        .read_to_end(&mut embedded)
+        .unwrap();
+    assert_eq!(embedded, b"opaque profile");
     let mut resources = Vec::new();
     archive
         .by_name("Payload/Post.Card.app/_CodeSignature/CodeResources")
@@ -363,6 +433,7 @@ fn ios_preserves_previous_app_when_resource_or_signing_fails() {
     for setting in [
         "icon = [\"broken.svg\"]",
         "apple_signing_p12 = \"missing.p12\"",
+        "apple_provisioning_profile = \"missing.mobileprovision\"",
     ] {
         fs::write(
             &manifest,

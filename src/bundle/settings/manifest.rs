@@ -130,6 +130,8 @@ pub(super) struct BundleSettings {
     pub(super) apple_signing_entitlements: Option<PathBuf>,
     /// Enable the hardened runtime in Apple code signatures.
     pub(super) apple_signing_hardened_runtime: Option<bool>,
+    /// Existing provisioning profile copied unchanged before signing.
+    pub(super) apple_provisioning_profile: Option<PathBuf>,
     /// App Store Connect API key used for Apple notarization.
     pub(super) apple_notarization_api_key: Option<PathBuf>,
     /// Maximum time to wait for Apple's notarization service, in seconds.

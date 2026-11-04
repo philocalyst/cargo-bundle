@@ -615,6 +615,10 @@ impl Settings {
         self.bundle_settings.apple_signing_p12.as_deref()
     }
 
+    pub fn apple_provisioning_profile(&self) -> Option<&Path> {
+        self.bundle_settings.apple_provisioning_profile.as_deref()
+    }
+
     /// Environment variable containing the Apple PKCS#12 certificate password.
     pub fn apple_signing_password_env(&self) -> Option<&str> {
         self.bundle_settings.apple_signing_password_env.as_deref()

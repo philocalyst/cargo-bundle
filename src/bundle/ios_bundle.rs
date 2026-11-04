@@ -57,6 +57,7 @@ pub(super) fn create_app(settings: &Settings, directory: &Path) -> crate::Result
     );
     common::validate_bundle_name(settings.bundle_name())?;
     validate_bundle_identifier(&settings.bundle_identifier())?;
+    let profile = super::provisioning::PreparedProfile::for_settings(settings)?;
     let app_bundle_name = format!("{}.app", settings.bundle_name());
     common::print_bundling(&app_bundle_name)?;
     let bundle_dir = directory.join(&app_bundle_name);
@@ -90,6 +91,9 @@ pub(super) fn create_app(settings: &Settings, directory: &Path) -> crate::Result
     {
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&bin_path, fs::Permissions::from_mode(0o755))?;
+    }
+    if let Some(profile) = &profile {
+        profile.embed(&bundle_dir.join("embedded.mobileprovision"))?;
     }
     signing::sign_apple_bundle(settings, &bundle_dir)?;
     Ok(bundle_dir)

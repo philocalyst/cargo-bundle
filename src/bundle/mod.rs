@@ -10,6 +10,7 @@ mod linux;
 mod localization;
 mod msi_bundle;
 mod osx_bundle;
+mod provisioning;
 mod settings;
 mod signing;
 mod windows;
