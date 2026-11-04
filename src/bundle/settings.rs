@@ -4,7 +4,7 @@ mod manifest;
 mod resources;
 
 pub use format::{BuildArtifact, PackageType};
-pub use manifest::{DesktopAction, LinuxSigningSettings, WindowsSigningSettings};
+pub use manifest::{AndroidSettings, DesktopAction, LinuxSigningSettings, WindowsSigningSettings};
 pub use resources::ResourcePaths;
 
 use super::category::AppCategory;
@@ -103,6 +103,11 @@ impl Settings {
             Some(format) => format,
             None => PackageType::default_for_os(target_os)?,
         };
+        if package_type == PackageType::AndroidApk && target_os != "android" {
+            anyhow::bail!(
+                "APK packaging requires an Android target, e.g. --target aarch64-linux-android"
+            );
+        }
         let bundle_settings = Settings::bundle_settings_of_package(package, target_os)?;
         let target_base = cargo_settings.target_directory.as_std_path();
         // With multiple targets the per-target binaries are combined into a
@@ -115,6 +120,26 @@ impl Settings {
         let target_dir =
             Settings::get_target_dir(target_base, target_dir_name, &profile, &build_artifact);
         let (mut bundle_settings, mut binary_name) = match &build_artifact {
+            BuildArtifact::Main if package_type == PackageType::AndroidApk => {
+                let target = package
+                    .targets
+                    .iter()
+                    .find(|target| {
+                        target
+                            .crate_types
+                            .iter()
+                            .any(|kind| kind.to_string() == "cdylib")
+                    })
+                    .ok_or_else(|| {
+                        anyhow::anyhow!(
+                            "APK packaging requires a [lib] target with crate-type = [\"cdylib\"]"
+                        )
+                    })?;
+                (
+                    bundle_settings,
+                    format!("lib{}.so", target.name.replace('-', "_")),
+                )
+            }
             BuildArtifact::Main => {
                 if let Some(target) = package
                     .targets
@@ -192,6 +217,10 @@ impl Settings {
             binary_name,
             bundle_settings,
         })
+    }
+
+    pub fn android(&self) -> AndroidSettings {
+        self.bundle_settings.android.clone().unwrap_or_default()
     }
 
     pub fn manifest_path(&self) -> &Path {

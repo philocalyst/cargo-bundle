@@ -125,7 +125,11 @@ fn build_target_command(settings: &Settings, triple: Option<&str>) -> process::C
         cargo.arg(format!("--features={features}"));
     }
     match settings.build_artifact() {
-        BuildArtifact::Main => {}
+        BuildArtifact::Main => {
+            if settings.package_type() == bundle::PackageType::AndroidApk {
+                cargo.arg("--lib");
+            }
+        }
         BuildArtifact::Bin(name) => {
             cargo.arg(format!("--bin={name}"));
         }

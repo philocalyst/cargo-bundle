@@ -1,3 +1,4 @@
+mod apk_bundle;
 mod apple_trust;
 mod category;
 mod common;
@@ -36,6 +37,7 @@ pub fn bundle_project(settings: Settings) -> crate::Result<Vec<PathBuf>> {
         signing::validate_apple_notarization(&settings)?;
     }
     let mut paths = match package_type {
+        PackageType::AndroidApk => apk_bundle::bundle_project(&settings)?,
         PackageType::OsxBundle => osx_bundle::bundle_project(&settings)?,
         PackageType::OsxDmg => dmg_bundle::bundle_project(&settings)?,
         PackageType::IosBundle => ios_bundle::bundle_project(&settings)?,

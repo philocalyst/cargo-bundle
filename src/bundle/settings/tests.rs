@@ -590,10 +590,36 @@ fn parse_appimage_feature_settings() {
 }
 
 #[test]
+fn apk_requires_an_android_target() {
+    use clap::Parser;
+    let project = tempfile::tempdir().unwrap();
+    std::fs::create_dir(project.path().join("src")).unwrap();
+    std::fs::write(project.path().join("src/lib.rs"), "").unwrap();
+    std::fs::write(
+        project.path().join("Cargo.toml"),
+        "[package]\nname='native-app'\nversion='1.0.0'\n[lib]\ncrate-type=['cdylib']\n",
+    )
+    .unwrap();
+    let cli = crate::Cli::try_parse_from(["cargo-bundle", "--format", "apk"]).unwrap();
+    assert!(
+        super::Settings::new(project.path().into(), &cli)
+            .unwrap_err()
+            .to_string()
+            .contains("APK packaging requires an Android target")
+    );
+    let cli =
+        crate::Cli::try_parse_from(["cargo-bundle", "--target", "aarch64-linux-android"]).unwrap();
+    let settings = super::Settings::new(project.path().into(), &cli).unwrap();
+    assert_eq!(settings.package_type(), super::PackageType::AndroidApk);
+    assert_eq!(settings.binary_name(), "libnative_app.so");
+}
+
+#[test]
 fn format_names_round_trip_through_the_cli() {
     use super::PackageType;
     use clap::Parser;
     for (name, expected) in [
+        ("apk", PackageType::AndroidApk),
         ("deb", PackageType::Deb),
         ("ios", PackageType::IosBundle),
         ("ipa", PackageType::IosIpa),

@@ -79,11 +79,24 @@ pub(super) struct IosSettings {
     pub(super) localizations: Option<HashMap<String, HashMap<String, String>>>,
 }
 
+/// Android NativeActivity packaging settings.
+#[derive(Clone, Debug, Default, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct AndroidSettings {
+    pub version_code: Option<u32>,
+    pub min_sdk: Option<u32>,
+    pub target_sdk: Option<u32>,
+    pub permissions: Option<Vec<String>>,
+    pub manifest: Option<PathBuf>,
+    pub signing_key: Option<PathBuf>,
+}
+
 #[derive(Clone, Debug, Default, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct BundleSettings {
     /// Package-manifest-relative TOML files containing platform localization tables.
     pub(super) localization_files: Option<Vec<PathBuf>>,
+    pub(super) android: Option<AndroidSettings>,
     // General settings:
     pub(super) name: Option<String>,
     pub(super) identifier: Option<String>,
@@ -163,6 +176,7 @@ pub(super) fn normalize_platform_settings(
         "macos" => "osx",
         "windows" => "windows",
         "ios" => "ios",
+        "android" => "android",
         _ => return Ok(()),
     };
     let alias = (platform == "osx").then_some("macos");
@@ -205,6 +219,14 @@ pub(super) fn normalize_platform_settings(
             "dmg_background",
         ],
         "ios" => &["localizations"],
+        "android" => &[
+            "version_code",
+            "min_sdk",
+            "target_sdk",
+            "permissions",
+            "manifest",
+            "signing_key",
+        ],
         _ => &[],
     };
     for (key, value) in values {
@@ -230,7 +252,7 @@ pub(super) fn normalize_platform_settings(
 /// Validate every declared platform table, even when the current build only
 /// selects one of them, so malformed release configurations fail clearly.
 pub(super) fn validate_platform_settings(bundle: &Value) -> crate::Result<()> {
-    for os in ["linux", "macos", "windows", "ios"] {
+    for os in ["linux", "macos", "windows", "ios", "android"] {
         let mut candidate = bundle.clone();
         normalize_platform_settings(&mut candidate, os)?;
         let settings: BundleSettings = serde_json::from_value(candidate)?;

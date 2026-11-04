@@ -4,6 +4,8 @@ use clap::ValueEnum;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, ValueEnum)]
 pub enum PackageType {
+    #[value(name = "apk")]
+    AndroidApk,
     #[value(name = "deb")]
     Deb,
     #[value(name = "ios")]
@@ -38,6 +40,7 @@ impl PackageType {
             "macos" => Ok(Self::OsxBundle),
             "ios" => Ok(Self::IosBundle),
             "linux" => Ok(Self::Deb),
+            "android" => Ok(Self::AndroidApk),
             "windows" => Ok(Self::WindowsBundle),
             os => anyhow::bail!("Native {os} bundles not yet supported."),
         }
