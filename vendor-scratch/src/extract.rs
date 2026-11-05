@@ -202,23 +202,47 @@ pub(crate) fn extract(
     // Creating children changes a directory's mtime, and a restrictive mode
     // would stop them being created, so both wait until everything is in.
     for (directory, path, header) in directories.into_iter().rev() {
-        let handle = restorable(directory).within(Operation::Open, &tree.path, &path)?;
-        restore_metadata(&handle, &header, &tree.path.join(path))?;
+        let location = tree.path.join(&path);
+        let handle = restorable(directory, &location).within(Operation::Open, &tree.path, &path)?;
+        restore_metadata(&handle, &header, &location)?;
     }
     Ok((tree, cleanup))
 }
 
-/// A directory handle whose times and mode can be set. On Linux the handle may
-/// be an `O_PATH` descriptor, which rejects both with EBADF, so it is reopened
-/// as an ordinary descriptor. Elsewhere the handle already works, and on
-/// Windows reopening a directory is denied.
-fn restorable(directory: cap_std::fs::Dir) -> io::Result<File> {
+/// A directory handle whose times and mode can be set. `directory` is the
+/// capability handle and `path` where it was created.
+///
+/// On Linux that handle may be an `O_PATH` descriptor, which rejects both with
+/// EBADF, so it is reopened as an ordinary descriptor. On Windows it lacks
+/// write-attributes access, so the directory is opened again with it, without
+/// following a link, and checked to be the same directory. Elsewhere the handle
+/// already works.
+fn restorable(directory: cap_std::fs::Dir, path: &Path) -> io::Result<File> {
     #[cfg(any(target_os = "linux", target_os = "android"))]
     {
+        let _ = path;
         directory.open(".").map(cap_std::fs::File::into_std)
     }
-    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    #[cfg(windows)]
     {
+        use std::os::windows::fs::OpenOptionsExt;
+        const FILE_WRITE_ATTRIBUTES: u32 = 0x0000_0100;
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+        let expected = same_file::Handle::from_file(directory.into_std_file())?;
+        let reopened = fs::OpenOptions::new()
+            .access_mode(FILE_WRITE_ATTRIBUTES)
+            .share_mode(0x7)
+            .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+            .open(path)?;
+        if same_file::Handle::from_file(reopened.try_clone()?)? != expected {
+            return Err(io::Error::other("the directory was replaced while extracting"));
+        }
+        Ok(reopened)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android", windows)))]
+    {
+        let _ = path;
         Ok(directory.into_std_file())
     }
 }
