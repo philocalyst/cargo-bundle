@@ -97,7 +97,7 @@ appimage = { package = "appimage-rs", version = "0.3.0", features = ["launcher"]
 # `notarize` pulls in the AWS SDK because Apple's notary service takes uploads
 # through pre-signed S3 URLs.
 apple-codesign = { version = "0.29.0", default-features = false, features = ["notarize"] }
-osslsigncode = { version = "0.1.2", optional = true }
+osslsigncode = { version = "0.1.3", optional = true }
 sigstore-sign = { version = "0.15.1", default-features = false, features = ["native-tls", "tuf", "aws-lc-rs"] }
 tokio = { version = "1", default-features = false, features = ["rt"] }
 

@@ -13,11 +13,6 @@ jobs:
           - windows-latest
     runs-on: ${{ matrix.os }}
     name: Test
-    env:
-      # The vendored osslsigncode (windows-signing) relies on POSIX functions
-      # that gcc 14 no longer declares implicitly. Other platforms do not need
-      # this, and it breaks the vendored OpenSSL build on macOS.
-      CFLAGS: ${{ matrix.os == 'ubuntu-latest' && '-D_GNU_SOURCE' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
