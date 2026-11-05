@@ -49,6 +49,8 @@ fn appimage_wraps_the_binary_behind_the_given_runtime_and_survives_failures() {
         fs::read(extracted.join("usr/bin/postcard")).unwrap(),
         fs::read(&binary).unwrap()
     );
+    // AppRun is a link, which needs a privilege on Windows to extract.
+    #[cfg(unix)]
     assert!(extracted.join("AppRun").exists());
 
     // A runtime for the wrong CPU would build and then never start.
@@ -130,10 +132,13 @@ fn the_default_runtime_is_built_from_source_and_runs_the_app() {
         "launched with one two\n"
     );
     // It is a copy of the launcher, not of the official FUSE runtime.
-    let launcher = fs::read(cache.join(format!(
-        "cargo-bundle/appimage-runtime/0.3.0/host-{}",
-        std::env::consts::ARCH
-    )))
+    let versions = cache.join("cargo-bundle/appimage-runtime");
+    let version = fs::read_dir(&versions).unwrap().next().unwrap().unwrap();
+    let launcher = fs::read(
+        version
+            .path()
+            .join(format!("host-{}", std::env::consts::ARCH)),
+    )
     .unwrap();
     assert!(fs::read(&image).unwrap().starts_with(&launcher));
 }

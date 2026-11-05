@@ -120,3 +120,6 @@ path = "examples/hello/main.rs"
 [[example]]
 name = "goodbye"
 path = "examples/goodbye/main.rs"
+
+[patch.crates-io]
+appimage-rs = { path = "vendor-scratch" }

@@ -29,11 +29,21 @@ const BACKGROUND_SVG: &str = r##"<svg xmlns="http://www.w3.org/2000/svg" width="
 
 fn read(volume: &HfsPlus, device: &mut dyn BlockDevice, path: &str) -> Vec<u8> {
     let mut bytes = Vec::new();
-    volume
-        .open_file_reader(device, path)
-        .unwrap()
-        .read_to_end(&mut bytes)
-        .unwrap();
+    let reader = volume.open_file_reader(device, path);
+    match reader {
+        Ok(mut reader) => {
+            reader.read_to_end(&mut bytes).unwrap();
+        }
+        Err(error) => {
+            let root: Vec<_> = volume
+                .list_path(device, "/")
+                .unwrap()
+                .into_iter()
+                .map(|e| e.name)
+                .collect();
+            panic!("{path}: {error}; root has {root:?}");
+        }
+    }
     bytes
 }
 
