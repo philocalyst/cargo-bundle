@@ -49,7 +49,7 @@ fn plist_file(path: &Path) -> Dictionary {
     Value::from_file(path).unwrap().into_dictionary().unwrap()
 }
 
-/// Writes a signing identity, profile, entitlements and a Mach-O executable
+/// Writes a signing identity, entitlements and a Mach-O executable
 /// for `platform`, then returns a runner for `cargo bundle` with those inputs.
 fn signed_project(
     dir: &Path,
@@ -58,7 +58,6 @@ fn signed_project(
     binary_plist: bool,
 ) -> impl Fn(&[&str]) -> Output {
     write_identity(&dir.join("identity.p12"));
-    fs::write(dir.join("device.profile"), PROFILE).unwrap();
     let entitlements = Value::Dictionary(claims.clone());
     if binary_plist {
         entitlements
@@ -70,7 +69,6 @@ fn signed_project(
     let run = project(
         dir,
         "apple_signing_p12 = \"identity.p12\"\n\
-         apple_provisioning_profile = \"device.profile\"\n\
          apple_signing_entitlements = \"claims.plist\"\n",
     );
     let binary = dir.join("prebuilt");
@@ -78,20 +76,10 @@ fn signed_project(
     move |args| run(args, &binary)
 }
 
-const PROFILE: &[u8] = b"opaque \0 profile \xff bytes";
-
-/// Assert that the signature of the code rooted at `code_root` seals the
-/// profile and carries exactly `claims`.
-fn assert_sealed(code_root: &Path, executable: &Path, profile_name: &str, claims: &Dictionary) {
-    assert_eq!(fs::read(code_root.join(profile_name)).unwrap(), PROFILE);
-    let resources = plist_file(&code_root.join("_CodeSignature/CodeResources"));
-    assert!(
-        resources["files2"]
-            .as_dictionary()
-            .unwrap()
-            .contains_key(profile_name),
-        "the profile is not sealed by the signature"
-    );
+/// Assert that the code rooted at `code_root` is sealed and that its
+/// signature carries exactly `claims`.
+fn assert_sealed(code_root: &Path, executable: &Path, claims: &Dictionary) {
+    assert!(code_root.join("_CodeSignature/CodeResources").is_file());
     let bytes = fs::read(executable).unwrap();
     let macho = MachOBinary::parse(&bytes).unwrap();
     let signature = macho.code_signature().unwrap().unwrap();
@@ -113,12 +101,12 @@ fn claims() -> Dictionary {
     ])
 }
 
-/// A signature must seal the profile, so embedding it afterwards would break
-/// verification; the claims must also survive XML and binary input plists.
+/// The claims must survive XML and binary input plists and be what the
+/// signature carries.
 #[test]
-fn signed_bundles_seal_the_profile_and_entitlements() {
+fn signed_bundles_carry_exactly_the_requested_entitlements() {
     let claims = claims();
-    // (format, target, platform, code root inside the bundle, executable, profile)
+    // (format, target, platform, code root inside the bundle, executable)
     let cases = [
         (
             "osx",
@@ -126,18 +114,10 @@ fn signed_bundles_seal_the_profile_and_entitlements() {
             Platform::MacOs,
             "Contents",
             "Contents/MacOS/postcard",
-            "embedded.provisionprofile",
         ),
-        (
-            "ios",
-            "aarch64-apple-ios",
-            Platform::IOs,
-            "",
-            "postcard",
-            "embedded.mobileprovision",
-        ),
+        ("ios", "aarch64-apple-ios", Platform::IOs, "", "postcard"),
     ];
-    for (format, target, platform, root, executable, profile) in cases {
+    for (format, target, platform, root, executable) in cases {
         for binary_plist in [false, true] {
             let temp = tempfile::tempdir().unwrap();
             let run = signed_project(temp.path(), platform, &claims, binary_plist);
@@ -146,7 +126,7 @@ fn signed_bundles_seal_the_profile_and_entitlements() {
             let app = temp.path().join(format!(
                 "target/{target}/debug/bundle/{format}/Post Card.app"
             ));
-            assert_sealed(&app.join(root), &app.join(executable), profile, &claims);
+            assert_sealed(&app.join(root), &app.join(executable), &claims);
             if cfg!(target_os = "macos") && format == "osx" {
                 let verified = Command::new("/usr/bin/codesign")
                     .args(["--verify", "--deep", "--strict"])
@@ -175,12 +155,7 @@ fn ipa_wraps_the_signed_app_and_keeps_the_previous_archive_on_failure() {
         .extract(&extracted)
         .unwrap();
     let app = extracted.join("Payload/Post Card.app");
-    assert_sealed(
-        &app,
-        &app.join("postcard"),
-        "embedded.mobileprovision",
-        &claims,
-    );
+    assert_sealed(&app, &app.join("postcard"), &claims);
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -192,7 +167,7 @@ fn ipa_wraps_the_signed_app_and_keeps_the_previous_archive_on_failure() {
     }
 
     let before = fs::read(&ipa).unwrap();
-    fs::remove_file(dir.join("device.profile")).unwrap();
+    fs::remove_file(dir.join("identity.p12")).unwrap();
     assert!(
         !run(&["--format", "ipa", "--target", "aarch64-apple-ios"])
             .status
@@ -473,4 +448,58 @@ fn apk_rejects_invalid_settings_with_the_offending_key() {
         "{}",
         stderr(&output)
     );
+}
+
+/// Apple's own profiles are expired by now and a forged one has no Apple
+/// signature; either way the profile is refused and the last good app stays.
+#[test]
+fn a_bad_provisioning_profile_is_refused_before_anything_is_replaced() {
+    for (format, target, fixture) in [
+        ("osx", "aarch64-apple-darwin", "der-macos.provisionprofile"),
+        ("ios", "aarch64-apple-ios", "der-ios.mobileprovision"),
+        ("ios", "aarch64-apple-ios", "forged.mobileprovision"),
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let dir = temp.path();
+        let platform = if format == "osx" {
+            Platform::MacOs
+        } else {
+            Platform::IOs
+        };
+        let run = project(dir, "");
+        let binary = dir.join("prebuilt");
+        fs::write(&binary, macho(platform)).unwrap();
+        succeeded(&run(&["--format", format, "--target", target], &binary));
+        let app = dir.join(format!(
+            "target/{target}/debug/bundle/{format}/Post Card.app"
+        ));
+        fs::write(app.join("marker"), "the previous bundle").unwrap();
+
+        if fixture == "forged.mobileprovision" {
+            fs::write(dir.join(fixture), b"<plist/>").unwrap();
+        } else {
+            let source = common::project_root()
+                .join("tests/fixtures/apple")
+                .join(fixture);
+            fs::copy(source, dir.join(fixture)).unwrap();
+        }
+        let manifest = fs::read_to_string(dir.join("Cargo.toml")).unwrap();
+        fs::write(
+            dir.join("Cargo.toml"),
+            format!("{manifest}apple_provisioning_profile = \"{fixture}\"\n"),
+        )
+        .unwrap();
+        let output = run(&["--format", format, "--target", target], &binary);
+        assert!(!output.status.success(), "{fixture}");
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            stderr.contains("Invalid provisioning profile"),
+            "{fixture}: {stderr}"
+        );
+        assert_eq!(
+            fs::read_to_string(app.join("marker")).unwrap(),
+            "the previous bundle",
+            "{fixture}: the previous bundle was replaced"
+        );
+    }
 }

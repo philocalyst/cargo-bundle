@@ -309,6 +309,29 @@ pub fn print_error(error: &anyhow::Error) -> crate::Result<()> {
     }
 }
 
+/// Replace `destination` with the finished directory `staged`. A previous
+/// version is moved aside first and put back if the swap fails, so a failed
+/// build never costs the last good output.
+pub fn publish_dir(staged: &Path, destination: &Path) -> crate::Result<()> {
+    let parent = destination
+        .parent()
+        .context("Output has no parent directory")?;
+    let aside = tempfile::tempdir_in(parent)?;
+    let previous = aside.path().join("previous");
+    let had_previous = destination.exists();
+    if had_previous {
+        fs::rename(destination, &previous)
+            .with_context(|| format!("Failed to move aside the old {destination:?}"))?;
+    }
+    if let Err(error) = fs::rename(staged, destination) {
+        if had_previous {
+            let _ = fs::rename(&previous, destination);
+        }
+        return Err(error).with_context(|| format!("Failed to publish {destination:?}"));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -317,6 +340,34 @@ mod tests {
 
     use std::io::Write;
     use std::path::{Path, PathBuf};
+
+    #[test]
+    fn publishing_replaces_the_old_directory_or_leaves_it_alone() {
+        use super::publish_dir;
+        use std::fs;
+        let temp = tempfile::tempdir().unwrap();
+        let published = temp.path().join("App.app");
+        let stage = |name: &str, version: &str| {
+            let staged = temp.path().join(name);
+            fs::create_dir(&staged).unwrap();
+            fs::write(staged.join("version"), version).unwrap();
+            staged
+        };
+        let version = || fs::read_to_string(published.join("version")).unwrap();
+        publish_dir(&stage("first", "1"), &published).unwrap();
+        assert_eq!(version(), "1");
+        publish_dir(&stage("second", "2"), &published).unwrap();
+        assert_eq!(version(), "2");
+
+        // A build that produced nothing must not cost the last good output.
+        assert!(publish_dir(&temp.path().join("missing"), &published).is_err());
+        assert_eq!(version(), "2");
+        assert_eq!(
+            fs::read_dir(temp.path()).unwrap().count(),
+            1,
+            "nothing left behind"
+        );
+    }
 
     #[test]
     fn bundle_names_are_single_file_names() {

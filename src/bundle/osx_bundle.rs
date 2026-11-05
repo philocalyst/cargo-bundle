@@ -19,6 +19,7 @@
 // files into the `Contents` directory of the bundle.
 
 use super::common::{self, read_file};
+use super::provisioning::Profile;
 use super::signing;
 use crate::Settings;
 use anyhow::Context;
@@ -38,14 +39,16 @@ pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
 }
 
 pub fn bundle_project_at(settings: &Settings, output_dir: &Path) -> crate::Result<PathBuf> {
+    // A bad profile fails before anything is built or replaced.
+    let profile = Profile::load(settings)?;
     let app_bundle_name = format!("{}.app", settings.bundle_name());
     common::print_bundling(&app_bundle_name)?;
     let app_bundle_path = output_dir.join(&app_bundle_name);
-    if app_bundle_path.exists() {
-        fs::remove_dir_all(&app_bundle_path)
-            .with_context(|| format!("Failed to remove old {app_bundle_name}"))?;
-    }
-    let bundle_directory = app_bundle_path.join("Contents");
+    fs::create_dir_all(output_dir)
+        .with_context(|| format!("Failed to create output directory {output_dir:?}"))?;
+    let staging = tempfile::tempdir_in(output_dir)?;
+    let staged_path = staging.path().join(&app_bundle_name);
+    let bundle_directory = staged_path.join("Contents");
     fs::create_dir_all(&bundle_directory)
         .with_context(|| format!("Failed to create bundle directory at {bundle_directory:?}"))?;
 
@@ -84,12 +87,12 @@ pub fn bundle_project_at(settings: &Settings, output_dir: &Path) -> crate::Resul
         add_rpath(&bundle_directory, settings)?;
     }
 
-    signing::embed_apple_provisioning_profile(
-        settings,
-        &bundle_directory.join("embedded.provisionprofile"),
-    )?;
-    signing::sign_apple_path(settings, &app_bundle_path)?;
+    if let Some(profile) = &profile {
+        profile.embed(&bundle_directory.join("embedded.provisionprofile"))?;
+    }
+    signing::sign_apple_path(settings, &staged_path, profile.as_ref())?;
 
+    common::publish_dir(&staged_path, &app_bundle_path)?;
     Ok(app_bundle_path)
 }
 

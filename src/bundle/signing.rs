@@ -1,21 +1,23 @@
 //! Optional platform code-signing helpers.
 
+use super::provisioning::Profile;
 use super::settings::Notarization;
 use crate::Settings;
 use anyhow::Context;
 use std::path::Path;
 
-/// Sign an Apple bundle or DMG with the pure-Rust `apple-codesign` library.
-pub fn sign_apple_path(settings: &Settings, path: &Path) -> crate::Result<()> {
-    use apple_codesign::{
-        CodeSignatureFlags, SettingsScope, SigningSettings, UnifiedSigner,
-        cryptography::{PrivateKey, parse_pfx_data},
-    };
-
+/// The configured PKCS#12 certificate and private key, if any.
+fn apple_identity(
+    settings: &Settings,
+) -> crate::Result<
+    Option<(
+        x509_certificate::CapturedX509Certificate,
+        apple_codesign::cryptography::InMemoryPrivateKey,
+    )>,
+> {
     let Some(p12_path) = settings.apple_signing_p12() else {
-        return Ok(());
+        return Ok(None);
     };
-
     let password = match settings.apple_signing_password_env() {
         Some(variable) => std::env::var(variable).with_context(|| {
             format!(
@@ -25,10 +27,35 @@ pub fn sign_apple_path(settings: &Settings, path: &Path) -> crate::Result<()> {
         // P12 files exported without a password use the empty string.
         None => String::new(),
     };
-    let certificate_data = std::fs::read(p12_path)
+    let data = std::fs::read(p12_path)
         .with_context(|| format!("Failed to read Apple signing certificate {p12_path:?}"))?;
-    let (certificate, private_key) = parse_pfx_data(&certificate_data, &password)
-        .map_err(|error| anyhow::anyhow!("Failed to read Apple signing certificate: {error}"))?;
+    apple_codesign::cryptography::parse_pfx_data(&data, &password)
+        .map(Some)
+        .map_err(|error| anyhow::anyhow!("Failed to read Apple signing certificate: {error}"))
+}
+
+/// The configured signing certificate, for checking it against a profile.
+pub(super) fn apple_certificate(
+    settings: &Settings,
+) -> crate::Result<Option<x509_certificate::CapturedX509Certificate>> {
+    Ok(apple_identity(settings)?.map(|(certificate, _)| certificate))
+}
+
+/// Sign an Apple bundle or DMG with the pure-Rust `apple-codesign` library.
+/// A bundle with a provisioning profile is signed with the entitlements
+/// reconciled against it; anything else with the configured plist, if any.
+pub fn sign_apple_path(
+    settings: &Settings,
+    path: &Path,
+    profile: Option<&Profile>,
+) -> crate::Result<()> {
+    use apple_codesign::{
+        CodeSignatureFlags, SettingsScope, SigningSettings, UnifiedSigner, cryptography::PrivateKey,
+    };
+
+    let Some((certificate, private_key)) = apple_identity(settings)? else {
+        return Ok(());
+    };
 
     let mut signing_settings = SigningSettings::default();
     signing_settings.set_signing_key(private_key.as_key_info_signer(), certificate);
@@ -39,9 +66,14 @@ pub fn sign_apple_path(settings: &Settings, path: &Path) -> crate::Result<()> {
             .set_time_stamp_url(timestamp_url)
             .map_err(|error| anyhow::anyhow!("Invalid Apple signing timestamp URL: {error}"))?;
     }
-    if let Some(entitlements_path) = settings.apple_signing_entitlements() {
+    let entitlements = match (profile, settings.apple_signing_entitlements()) {
+        (Some(profile), _) => Some(xml(plist::to_value(&profile.entitlements)?)?),
+        (None, Some(path)) => Some(entitlements_xml(path)?),
+        (None, None) => None,
+    };
+    if let Some(entitlements) = entitlements {
         signing_settings
-            .set_entitlements_xml(SettingsScope::Main, entitlements_xml(entitlements_path)?)
+            .set_entitlements_xml(SettingsScope::Main, entitlements)
             .map_err(|error| anyhow::anyhow!("Invalid Apple signing entitlements: {error}"))?;
     }
     if settings.apple_signing_hardened_runtime() {
@@ -62,6 +94,10 @@ fn entitlements_xml(path: &Path) -> crate::Result<String> {
         entitlements.as_dictionary().is_some(),
         "Apple signing entitlements {path:?} must be a plist dictionary"
     );
+    xml(entitlements)
+}
+
+fn xml(entitlements: plist::Value) -> crate::Result<String> {
     let mut xml = Vec::new();
     entitlements.to_writer_xml(&mut xml)?;
     Ok(String::from_utf8(xml)?)
@@ -99,19 +135,6 @@ fn notarize(notarization: &Notarization, path: &Path) -> crate::Result<()> {
         .staple_path(path)
         .map_err(|error| anyhow::anyhow!("Failed to staple the ticket to {path:?}: {error}"))?;
     Ok(())
-}
-
-/// Copy the configured provisioning profile to `destination` inside a bundle.
-/// Call this before signing so the code signature seals the profile.
-pub(super) fn embed_apple_provisioning_profile(
-    settings: &Settings,
-    destination: &Path,
-) -> crate::Result<()> {
-    let Some(profile) = settings.apple_provisioning_profile() else {
-        return Ok(());
-    };
-    super::common::copy_file(profile, destination)
-        .with_context(|| format!("Failed to embed provisioning profile {profile:?}"))
 }
 
 /// Sign a Windows executable or installer when configured.

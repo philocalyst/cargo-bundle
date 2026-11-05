@@ -62,7 +62,7 @@ pub fn bundle_project(settings: &Settings) -> crate::Result<Vec<PathBuf>> {
     )
     .context("Failed to build the HFS+ disk image")?;
 
-    signing::sign_apple_path(settings, &candidate)?;
+    signing::sign_apple_path(settings, &candidate, None)?;
     candidate
         .persist(&disk_image_path)
         .with_context(|| format!("Failed to write {disk_image_path:?}"))?;

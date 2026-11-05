@@ -9,6 +9,7 @@
 // explanation.
 
 use super::common;
+use super::provisioning::Profile;
 use super::signing;
 use crate::Settings;
 use anyhow::Context;
@@ -32,13 +33,14 @@ pub fn bundle_project_at(settings: &Settings, output_dir: &Path) -> crate::Resul
     common::print_warning("iOS bundle support is still experimental.")?;
     validate_bundle_identifier(&settings.bundle_identifier())?;
 
+    let profile = Profile::load(settings)?;
     let app_bundle_name = format!("{}.app", settings.bundle_name());
     common::print_bundling(&app_bundle_name)?;
-    let bundle_dir = output_dir.join(&app_bundle_name);
-    if bundle_dir.exists() {
-        fs::remove_dir_all(&bundle_dir)
-            .with_context(|| format!("Failed to remove old {app_bundle_name}"))?;
-    }
+    let published_dir = output_dir.join(&app_bundle_name);
+    fs::create_dir_all(output_dir)
+        .with_context(|| format!("Failed to create output directory {output_dir:?}"))?;
+    let staging = tempfile::tempdir_in(output_dir)?;
+    let bundle_dir = staging.path().join(&app_bundle_name);
     fs::create_dir_all(&bundle_dir)
         .with_context(|| format!("Failed to create bundle directory at {bundle_dir:?}"))?;
 
@@ -67,12 +69,12 @@ pub fn bundle_project_at(settings: &Settings, output_dir: &Path) -> crate::Resul
         fs::set_permissions(&bin_path, fs::Permissions::from_mode(0o755))?;
     }
     // Everything the signature should seal must be in place before this point.
-    signing::embed_apple_provisioning_profile(
-        settings,
-        &bundle_dir.join("embedded.mobileprovision"),
-    )?;
-    signing::sign_apple_path(settings, &bundle_dir)?;
-    Ok(bundle_dir)
+    if let Some(profile) = &profile {
+        profile.embed(&bundle_dir.join("embedded.mobileprovision"))?;
+    }
+    signing::sign_apple_path(settings, &bundle_dir, profile.as_ref())?;
+    common::publish_dir(&bundle_dir, &published_dir)?;
+    Ok(published_dir)
 }
 
 /// An unset identifier is empty, and a device refuses to install such an app.
