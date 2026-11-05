@@ -15,7 +15,7 @@ use std::{env, fs};
 
 /// The `appimage-rs` requirement the launcher is built from. It must match the
 /// dependency in `Cargo.toml`, which a test checks.
-const APPIMAGE_RS_REQUIREMENT: &str = "0.3.0";
+const APPIMAGE_RS_REQUIREMENT: &str = "0.3.1";
 
 /// Load the runtime for `architecture` (a name from `arch.rs`).
 pub(super) fn read(settings: &Settings, architecture: &str) -> crate::Result<Runtime> {
