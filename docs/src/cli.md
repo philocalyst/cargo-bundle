@@ -11,7 +11,7 @@ cargo bundle [OPTIONS]
 | `-p, --package <SPEC>` | Bundle this workspace member. Without it the root package is used. |
 | `-f, --format <FORMAT>` | One of the [formats](formats.md). |
 | `-r, --release`, `--profile <NAME>` | Build and bundle that profile. |
-| `-t, --target <TRIPLE>` | Build for a target. Repeat it on macOS to combine architectures into one universal binary with `lipo`. |
+| `-t, --target <TRIPLE>` | Build for a target. Repeat it on macOS to combine architectures into one universal binary with `lipo`; targets of different operating systems, or repeated non-macOS targets, are refused. |
 | `--features`, `--all-features`, `--no-default-features` | Passed to `cargo build`. |
 | `--binary-path <PATH>` | Bundle this prebuilt file instead of running `cargo build`. |
 
@@ -28,8 +28,8 @@ cargo bundle --release --bin my-app --binary-path target/release/my-app
 ```
 
 Use it when a CI job builds once and packages several formats, or when another
-build system produced the executable. Android requires it; see
-[Android](platforms/android.md).
+build system produced the executable. For an APK it names the prebuilt
+`lib<name>.so`; see [Android](platforms/android.md).
 
 ## Output directories
 

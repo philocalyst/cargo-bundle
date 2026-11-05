@@ -4,15 +4,21 @@
 `<Name>.apk`. The library must be a Rust `cdylib` built for an Android target
 that exports `ANativeActivity_onCreate`.
 
-cargo-bundle cannot find a library target by itself, so build the library and
-pass it with `--binary-path`. Its file name must be `lib<name>.so`; `<name>`
-becomes the activity's library name.
+The package needs a `cdylib` target. `--target` must be an Android triple, and
+cargo-bundle builds the library (`cargo build --lib`) and packages
+`lib<name>.so`; `<name>` becomes the activity's library name.
+
+```toml
+[lib]
+crate-type = ["cdylib"]
+```
 
 ```sh
-cargo build --release --lib --target aarch64-linux-android
-cargo bundle --format apk --target aarch64-linux-android \
-    --binary-path target/aarch64-linux-android/release/libmy_app.so
+cargo bundle --release --format apk --target aarch64-linux-android
 ```
+
+To package a library built elsewhere, pass it with `--binary-path`; its file
+name must be `lib<name>.so`.
 
 ```toml
 [package.metadata.bundle]
@@ -36,7 +42,8 @@ signing_key = "release.pem"
 | `version_code` | `android:versionCode`, default 1. The version name is the bundle version. |
 | `min_sdk`, `target_sdk` | API levels. Without them the `rust-apk` defaults apply. |
 | `permissions` | Extra manifest permissions such as `android.permission.INTERNET`. |
-| `signing_key` | A PEM file holding the private key and certificate. |
+| `manifest` | A complete `AndroidManifest.xml` to use instead of the generated NativeActivity one, relative to the package's `Cargo.toml`. |
+| `signing_key` | A PEM file holding the private key and certificate, relative to the package's `Cargo.toml`. |
 
 Unknown keys under `[android]` and invalid values are errors that name the key.
 

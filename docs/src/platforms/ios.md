@@ -13,6 +13,10 @@ cargo bundle --format ipa --target aarch64-apple-ios \
 `ipa` requires exactly `--target aarch64-apple-ios`. Simulator, Mac Catalyst and
 macOS targets cannot be installed from an IPA and are refused.
 
+Links inside the app, such as a framework's `Versions/Current`, are archived
+as links; one that points outside the app is an error. Notarization is for
+macOS only, so `apple_notarization_api_key` with an iOS format is refused.
+
 ## Requirements
 
 - `identifier` must be set, made of dot-separated parts of letters, digits and

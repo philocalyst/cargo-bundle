@@ -30,8 +30,10 @@ apple_provisioning_profile = "packaging/app.mobileprovision"
 | `apple_signing_timestamp_url` | An RFC 3161 timestamp service. |
 | `apple_provisioning_profile` | A provisioning profile, copied unchanged to `Contents/embedded.provisionprofile` (macOS) or `embedded.mobileprovision` (iOS). |
 
-The profile is copied in before signing, so the signature seals it. A disk
-image is signed after the app inside it.
+The profile is copied in unchanged before signing, so the signature seals it;
+cargo-bundle does not inspect it, so check yourself that it has not expired and
+matches the `identifier`, the platform and the signing certificate. A disk image
+is signed after the app inside it.
 
 ### Notarization
 
@@ -43,10 +45,10 @@ apple_notarization_timeout = 600
 The key file is an App Store Connect API key in the format `rcodesign
 encode-app-store-connect-api-key` writes. After signing, the app or image is
 submitted, cargo-bundle waits up to `apple_notarization_timeout` seconds (600 by
-default) for Apple's verdict, and staples the ticket. Notarization needs a
+default; zero is rejected) for Apple's verdict, and staples the ticket. Notarization needs a
 Developer ID certificate, the hardened runtime and a timestamp; if any is
 missing, the run fails before anything is built. The setting
-applies to `osx` and `dmg` only.
+applies to `osx` and `dmg` only; with an iOS format it is an error.
 
 ## Windows
 
