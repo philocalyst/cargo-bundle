@@ -202,14 +202,25 @@ pub(crate) fn extract(
     // Creating children changes a directory's mtime, and a restrictive mode
     // would stop them being created, so both wait until everything is in.
     for (directory, path, header) in directories.into_iter().rev() {
-        // A directory handle may be an `O_PATH` descriptor, which cannot have
-        // its times set (EBADF on Linux). Reopen it as an ordinary descriptor.
-        let handle = directory
-            .open(".")
-            .within(Operation::Open, &tree.path, &path)?;
-        restore_metadata(&handle.into_std(), &header, &tree.path.join(path))?;
+        let handle = restorable(directory).within(Operation::Open, &tree.path, &path)?;
+        restore_metadata(&handle, &header, &tree.path.join(path))?;
     }
     Ok((tree, cleanup))
+}
+
+/// A directory handle whose times and mode can be set. On Linux the handle may
+/// be an `O_PATH` descriptor, which rejects both with EBADF, so it is reopened
+/// as an ordinary descriptor. Elsewhere the handle already works, and on
+/// Windows reopening a directory is denied.
+fn restorable(directory: cap_std::fs::Dir) -> io::Result<File> {
+    #[cfg(any(target_os = "linux", target_os = "android"))]
+    {
+        directory.open(".").map(cap_std::fs::File::into_std)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android")))]
+    {
+        Ok(directory.into_std_file())
+    }
 }
 
 fn file_name(path: &Path) -> Result<&Path> {
