@@ -2,6 +2,11 @@ name: CI
 
 on: [ push, pull_request, workflow_dispatch ]
 
+env:
+  # The vendored osslsigncode (windows-signing) relies on POSIX functions that
+  # newer gcc no longer declares implicitly.
+  CFLAGS: -D_GNU_SOURCE
+
 jobs:
   test:
     strategy:

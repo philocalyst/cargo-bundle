@@ -99,7 +99,8 @@ fn the_default_runtime_is_built_from_source_and_runs_the_app() {
 
     let temp = tempfile::tempdir().unwrap();
     let cache = temp.path().join("cache");
-    project(temp.path(), "");
+    // Only the manifest is needed; the bundle is built by hand to set the cache.
+    let _ = project(temp.path(), "");
     let binary = temp.path().join("prebuilt");
     fs::write(&binary, "#!/bin/sh\necho \"launched with $*\"\n").unwrap();
     fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
