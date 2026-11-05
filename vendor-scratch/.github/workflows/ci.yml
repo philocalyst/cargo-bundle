@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - name: Install FUSE
+        if: startsWith(matrix.os, 'ubuntu')
+        run: sudo apt-get update && sudo apt-get install -y fuse3
+      - run: cargo clippy --locked --all-targets --all-features
+      - run: cargo test --locked --all-features
+      - run: cargo test --locked --no-default-features
+      - run: cargo doc --locked --no-deps --all-features
+
+  # The standalone runtime is the thing people ship, so check that it really
+  # is one self-contained executable that can launch an AppImage.
+  static-runtime:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - run: >
+          cargo build --locked --profile runtime --features launcher
+          --bin appimage-runtime --target x86_64-unknown-linux-musl
+      - name: Assert the binary is fully static
+        run: |
+          file target/x86_64-unknown-linux-musl/runtime/appimage-runtime | tee /tmp/file
+          ! grep -q "dynamically linked" /tmp/file
+      - name: Pack and run an AppImage with it
+        run: |
+          mkdir Hello.AppDir
+          printf '#!/bin/sh\necho "hello from $APPDIR"\n' > Hello.AppDir/AppRun
+          chmod +x Hello.AppDir/AppRun
+          cargo run --locked --example pack -- Hello.AppDir Hello.AppImage \
+              target/x86_64-unknown-linux-musl/runtime/appimage-runtime
+          ./Hello.AppImage | grep -q "hello from"

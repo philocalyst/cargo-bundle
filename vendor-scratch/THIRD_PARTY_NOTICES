@@ -1,0 +1,32 @@
+# Third-party notices
+
+This crate is pure Rust. The **default build links no native/C libraries** — it
+does not vendor the AppImage runtime, libfuse, or squashfuse. It depends only on
+permissively licensed Rust crates (MIT / Apache-2.0 / BSD / zlib), notably:
+
+- [`backhand`](https://crates.io/crates/backhand) — SquashFS reader/writer (MIT OR Apache-2.0)
+- [`object`](https://crates.io/crates/object) — ELF parsing (MIT OR Apache-2.0)
+- [`fuser`](https://crates.io/crates/fuser), Linux only — FUSE protocol in pure Rust, built without its `libfuse` features (MIT)
+- [`flate2`](https://crates.io/crates/flate2) (MIT OR Apache-2.0) + [`zlib-rs`](https://crates.io/crates/zlib-rs) (Zlib) — gzip, pure Rust
+- [`lz4_flex`](https://crates.io/crates/lz4_flex), [`rust-lzo`](https://crates.io/crates/rust-lzo) — lz4 / lzo, pure Rust
+
+`fuser` mounts with `mount(2)` and, for an unprivileged user, asks the system's
+`fusermount3` helper at runtime; the helper is not linked or redistributed by
+this crate.
+
+The optional `launcher` feature adds [`signal-hook`](https://crates.io/crates/signal-hook)
+(Apache-2.0 OR MIT) and uses [`libc`](https://crates.io/crates/libc) (MIT OR Apache-2.0).
+
+Directory operations use [`cap-std`](https://crates.io/crates/cap-std) and
+[`cap-tempfile`](https://crates.io/crates/cap-tempfile) (Apache-2.0 WITH LLVM-exception
+OR Apache-2.0 OR MIT). [`same-file`](https://crates.io/crates/same-file) checks
+directory identity (Unlicense OR MIT).
+
+## Optional decoders
+
+The non-default `xz` and `zstd` features add pure-Rust SquashFS decompression:
+
+- `xz` → [`lzma-rs`](https://crates.io/crates/lzma-rs) (MIT)
+- `zstd` → [`ruzstd`](https://crates.io/crates/ruzstd) (MIT)
+
+These features add reading support; packing supports gzip, LZ4, LZO, and uncompressed payloads.
