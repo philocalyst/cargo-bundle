@@ -4,8 +4,9 @@ on: [ push, pull_request, workflow_dispatch ]
 
 env:
   # The vendored osslsigncode (windows-signing) relies on POSIX functions that
-  # newer gcc no longer declares implicitly.
-  CFLAGS: -D_GNU_SOURCE
+  # gcc 14 no longer declares implicitly. Other platforms do not need this, and
+  # it breaks the vendored OpenSSL build on macOS.
+  CFLAGS: ${{ runner.os == 'Linux' && '-D_GNU_SOURCE' || '' }}
 
 jobs:
   test:
