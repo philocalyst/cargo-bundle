@@ -93,7 +93,9 @@ fstool = { version = "0.5.2", default-features = false, features = ["std", "hfs-
 # launcher's sources and dependencies in cargo's registry at install time, so
 # building the AppImage runtime works offline.
 appimage = { package = "appimage-rs", version = "0.3.0", features = ["launcher"] }
-apple-codesign = { version = "0.29.0", default-features = false }
+# `notarize` pulls in the AWS SDK because Apple's notary service takes uploads
+# through pre-signed S3 URLs.
+apple-codesign = { version = "0.29.0", default-features = false, features = ["notarize"] }
 osslsigncode = { version = "0.1.2", optional = true }
 sigstore-sign = { version = "0.15.1", default-features = false, features = ["native-tls", "tuf", "aws-lc-rs"] }
 tokio = { version = "1", default-features = false, features = ["rt"] }
