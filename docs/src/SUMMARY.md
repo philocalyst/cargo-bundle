@@ -14,5 +14,6 @@
   - [Linux](platforms/linux.md)
   - [Windows](platforms/windows.md)
 - [Signing](signing.md)
+- [Releasing from CI](releasing.md)
 - [Troubleshooting](troubleshooting.md)
 - [Contributing](contributing.md)
