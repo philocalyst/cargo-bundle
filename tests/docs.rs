@@ -143,3 +143,93 @@ fn pages_are_listed_and_links_resolve() {
         }
     }
 }
+
+/// The ```toml blocks of every page, with the page they are on.
+fn toml_blocks() -> Vec<(String, String)> {
+    let mut blocks = Vec::new();
+    for (page, text) in pages() {
+        for rest in text.split("```toml\n").skip(1) {
+            blocks.push((page.clone(), rest.split("```").next().unwrap().to_owned()));
+        }
+    }
+    blocks
+}
+
+/// Run `cargo bundle --format deb` on a package whose manifest is `manifest`,
+/// with a stand-in for the executable, and return the finished process.
+fn bundle(manifest: &str) -> (tempfile::TempDir, std::process::Output) {
+    let temp = tempfile::tempdir().unwrap();
+    fs::create_dir(temp.path().join("src")).unwrap();
+    fs::write(temp.path().join("src/main.rs"), "fn main() {}\n").unwrap();
+    fs::write(temp.path().join("Cargo.toml"), manifest).unwrap();
+    fs::write(temp.path().join("prebuilt"), "binary").unwrap();
+    let output = std::process::Command::new(env!("CARGO_BIN_EXE_cargo-bundle"))
+        .args(["bundle", "--format", "deb", "--binary-path", "prebuilt"])
+        .current_dir(temp.path())
+        .env("TERM", "dumb")
+        .output()
+        .unwrap();
+    (temp, output)
+}
+
+#[test]
+fn the_first_bundle_in_the_introduction_works() {
+    let intro = read("docs/src/index.md");
+    let manifest = intro
+        .split("```toml\n")
+        .nth(1)
+        .and_then(|rest| rest.split("```").next())
+        .unwrap();
+    let (temp, output) = bundle(manifest);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains(".deb"), "{stdout}");
+    assert!(temp.path().join("target/debug/bundle/deb").is_dir());
+}
+
+#[test]
+fn every_manifest_example_in_the_guide_is_accepted() {
+    let header = "[package]\nname = \"my-app\"\nversion = \"0.1.0\"\nedition = \"2024\"\n";
+    let mut checked = 0;
+    for (page, block) in toml_blocks() {
+        if !block.contains("[package.metadata.bundle") && !block.contains("[package]") {
+            continue;
+        }
+        let manifest = if block.contains("[package]") {
+            block.clone()
+        } else if block.contains("[package.metadata.bundle]") {
+            format!("{header}{block}")
+        } else {
+            format!(
+                "{header}[package.metadata.bundle]\nidentifier = \"com.example.my-app\"\n{block}"
+            )
+        };
+        let (_, output) = bundle(&manifest);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Examples may name files that do not exist here; settings must still
+        // parse, validate and agree with the code.
+        for rejected in [
+            "unknown field",
+            "invalid type",
+            "invalid value",
+            "missing field",
+            "duplicate",
+            "Invalid locale",
+            "Use only one",
+            "must be a table",
+            "not a platform override",
+            "TOML parse error",
+        ] {
+            assert!(
+                !stderr.contains(rejected),
+                "{page}: {rejected}\n{block}\n{stderr}"
+            );
+        }
+        checked += 1;
+    }
+    assert!(checked >= 10, "only {checked} examples were checked");
+}

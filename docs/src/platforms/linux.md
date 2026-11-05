@@ -49,7 +49,8 @@ Exec = "myapp --new-window"
 fr = "Nouvelle fenêtre"
 ```
 
-`Name` is required, `Exec` defaults to the binary, and `Icon` is optional.
+`Name` is required, `Exec` defaults to the binary, and `Icon` is optional. An
+action id may use letters, digits and `-`.
 
 ## AppImage
 
@@ -58,7 +59,7 @@ An AppImage is a runtime executable followed by a SquashFS image of the app.
 | Key | Meaning |
 | --- | --- |
 | `appimage_metainfo_path` | An AppStream metainfo XML file, copied to `usr/share/metainfo/<identifier>.appdata.xml`. A warning is printed when it is missing. |
-| `appimage_compression` | `"gzip"` (the default and most compatible), `"lz4"`, `"lzo"` or `"none"`. |
+| `appimage_compression` | `"gzip"` (the default and most compatible), `"lz4"`, `"lzo"` or `"none"`; anything else is rejected when the manifest is read. |
 | `appimage_runtime` | Path to the runtime executable. See below. |
 
 Elements of the metainfo file marked `trkey="Name"` (or `Comment`,

@@ -9,6 +9,10 @@ Choose the target when cross-compiling, for example
 `--target x86_64-pc-windows-msvc`. Without `--format`, a Windows target builds
 `msi` and `exe`.
 
+A `[package.metadata.bundle.windows]` table has no keys of its own, but it can
+replace general settings such as `name` or `icon` for Windows builds; see
+[Platform tables](../manifest.md#platform-tables).
+
 ## exe
 
 Copies the program to `bundle/exe/<binary>.exe`. On a Windows host it also
