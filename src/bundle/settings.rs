@@ -51,6 +51,20 @@ impl std::fmt::Display for PackageType {
     }
 }
 
+impl PackageType {
+    /// The platform this format is for. An APK is not named here: it needs an
+    /// Android ABI, which only `--target` can give.
+    fn native_os(self) -> Option<TargetOs> {
+        match self {
+            Self::AndroidApk => None,
+            Self::OsxBundle | Self::OsxDmg => Some(TargetOs::MacOs),
+            Self::IosBundle | Self::IosIpa => Some(TargetOs::Ios),
+            Self::WindowsMsi | Self::WxsMsi | Self::WindowsBundle => Some(TargetOs::Windows),
+            Self::Deb | Self::Rpm | Self::AppImage => Some(TargetOs::Linux),
+        }
+    }
+}
+
 /// An operating system cargo-bundle can package for.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TargetOs {
@@ -406,7 +420,12 @@ impl Settings {
                 }
                 first
             }
-            None => std::env::consts::OS.parse()?,
+            // A format names its own platform, so `--format dmg` on Linux reads
+            // the macOS settings. The host decides only when nothing else does.
+            None => match package_type.and_then(PackageType::native_os) {
+                Some(os) => os,
+                None => std::env::consts::OS.parse()?,
+            },
         };
         anyhow::ensure!(
             targets.len() < 2 || target_os == TargetOs::MacOs,

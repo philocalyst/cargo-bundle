@@ -71,8 +71,8 @@ resources = []              # nothing from the root list on iOS
 name = "Postcard for Windows"
 ```
 
-The platform is that of the first `--target`, or of the host without one;
-`--format` only chooses the writer. `osx` and `macos` are one table, so use one
+The platform is that of the first `--target`; without one it is the
+format's (a `dmg` is macOS even when built on Linux) and otherwise the host's. `osx` and `macos` are one table, so use one
 spelling. A named binary or example reads the same tables beneath its own
 table, such as `[package.metadata.bundle.bin.my-tool.windows]`, and still does
 not inherit from the root.

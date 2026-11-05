@@ -217,7 +217,13 @@ fn ios_bundle_escapes_metadata_and_seals_localizations_and_svg_icons() {
         "icon = [\"icon.svg\"]\napple_signing_p12 = \"identity.p12\"\n\
          [package.metadata.bundle.ios.localizations.fr]\nCFBundleDisplayName = \"Poisson & frites\"\n",
     );
-    rename(dir, "Fish & <Chips>");
+    // `<` and `>` cannot be in a file name on Windows.
+    let name = if cfg!(windows) {
+        "Fish & Chips"
+    } else {
+        "Fish & <Chips>"
+    };
+    rename(dir, name);
     fs::write(
         dir.join("icon.svg"),
         r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="#c00"/></svg>"##,
@@ -230,12 +236,11 @@ fn ios_bundle_escapes_metadata_and_seals_localizations_and_svg_icons() {
         &binary,
     ));
 
-    let app = dir.join("target/aarch64-apple-ios/debug/bundle/ios/Fish & <Chips>.app");
+    let app = dir.join(format!(
+        "target/aarch64-apple-ios/debug/bundle/ios/{name}.app"
+    ));
     let info = plist_file(&app.join("Info.plist"));
-    assert_eq!(
-        info["CFBundleDisplayName"].as_string(),
-        Some("Fish & <Chips>")
-    );
+    assert_eq!(info["CFBundleDisplayName"].as_string(), Some(name));
     assert_eq!(
         info["CFBundleIdentifier"].as_string(),
         Some("com.example.postcard")

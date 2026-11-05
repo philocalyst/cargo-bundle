@@ -5,7 +5,10 @@ use std::{collections::BTreeSet, fs, path::Path};
 
 fn read(path: impl AsRef<Path>) -> String {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join(path);
-    fs::read_to_string(&path).unwrap_or_else(|error| panic!("{path:?}: {error}"))
+    // A Windows checkout may have CRLF line endings.
+    fs::read_to_string(&path)
+        .unwrap_or_else(|error| panic!("{path:?}: {error}"))
+        .replace("\r\n", "\n")
 }
 
 /// All pages of the guide, as (path relative to docs/src, text).
@@ -24,7 +27,10 @@ fn pages() -> Vec<(String, String)> {
                     .unwrap()
                     .to_string_lossy()
                     .replace('\\', "/");
-                pages.push((name, fs::read_to_string(&path).unwrap()));
+                pages.push((
+                    name,
+                    fs::read_to_string(&path).unwrap().replace("\r\n", "\n"),
+                ));
             }
         }
     }

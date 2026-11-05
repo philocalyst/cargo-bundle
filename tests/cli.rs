@@ -325,3 +325,19 @@ fn values_that_cannot_be_used_are_rejected_where_they_are_read() {
         assert!(stderr.contains(message), "{settings}: {stderr}");
     }
 }
+
+#[test]
+fn a_format_picks_its_platforms_settings_without_a_target() {
+    let temp = tempfile::tempdir().unwrap();
+    let bundle = project(
+        temp.path(),
+        "[package.metadata.bundle.osx]\nname = \"Mac Card\"\n",
+    );
+    // No --target: the dmg is macOS output whatever the host is.
+    succeeded(&bundle(&["--format", "dmg"], &prebuilt(temp.path())));
+    assert!(
+        temp.path()
+            .join("target/debug/bundle/dmg/Mac Card.dmg")
+            .is_file()
+    );
+}
